@@ -11,7 +11,9 @@ The front end alignment primitives have changed quite a bit since the DAPHNEv2 (
 
 ## Spy Buffers
 
-The input spy buffers are deep enough to store 4k samples. The interface has changed from GbE/Captan style to AXI-LITE.
+The input spy buffers are deep enough to store 4k samples. The memory interface has changed from the custom GbE/Captan style to AXI-LITE. 
+
+When this module is instantiated the AXI interconnect will need to be told what base address to use (use anything that lines up with a 512k byte boundary), and how big the memory window should be (401408 bytes actual, use 512k bytes). See the file spybuffers.vhd for the memory map of the various spy buffers. All spy buffers are 32 bits wide, which means that two 16 bit samples are packed into each 32 bit word.
 
 
 ## Timing Endpoint
