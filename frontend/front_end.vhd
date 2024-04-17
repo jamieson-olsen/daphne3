@@ -39,10 +39,8 @@ port(
 
     -- AFE interface: 
 
-    afe_p: in array_5x9_type; -- 5 x 9 = 45 LVDS pairs (7..0 = data, 8 = fclk)
-    afe_n: in array_5x9_type;
-    afe_clk_p: out std_logic; -- copy of 62.5MHz master clock sent to AFEs
-    afe_clk_n: out std_logic;
+    afe_p, afe_n: in array_5x9_type; -- 5 x 9 = 45 LVDS pairs (7..0 = data, 8 = fclk)
+    afe_clk_p, afe_clk_n: out std_logic; -- copy of 62.5MHz master clock fanned out to AFEs
 
     -- high speed FPGA fabric interface:
 
@@ -50,6 +48,7 @@ port(
     clk125:  in  std_logic; -- 125MHz byte clock
     clock:   in  std_logic; -- 62.5MHz master clock
     dout:    out array_5x9x16_type; -- data synchronized to clock
+    trig:    out std_logic; -- user generated trigger
 
     -- AXI-Lite interface:
 
@@ -86,6 +85,7 @@ architecture fe_arch of front_end is
     signal idelay_en_vtc: std_logic;
     signal iserdes_bitslip: array_5x4_type;
     signal iserdes_reset: std_logic;
+    signal trig_axi, trig_reg: std_logic := '0';
 
     component febit3
     port(
@@ -132,7 +132,8 @@ architecture fe_arch of front_end is
         idelay_en_vtc: out std_logic;
         idelay_load: out std_logic_vector(4 downto 0);
         iserdes_bitslip: out array_5x4_type;
-        iserdes_reset: out std_logic
+        iserdes_reset: out std_logic;
+        trig: out std_logic
     );
     end component;
 
@@ -224,14 +225,17 @@ begin
         idelay_load => idelay_load,
 
         iserdes_bitslip => iserdes_bitslip,
-        iserdes_reset => iserdes_reset
+        iserdes_reset => iserdes_reset,
+        trig => trig_axi
     );
 
-    -- there are some timing critical signals that must cross from the AXI-LITE clock domain:
+    -- there are some timing critical signals that must cross from the AXI-LITE clock domain into other clock domains...
 
     -- IDELAY_LOAD originates in S_AXI_ACLK and is a short momentary pulse (two cycles long), must be resynced to clk125 domain.
 
     -- IDELAYCTRL_RESET originates in S_AXI_ACLK, must be resynced in clk500 domain.
+
+    -- TRIG_AXI originates in S_AXI_ACLK and is a short momentary pulse (two cycles long), must be resynced to clock domain.
 
     clk125_resync_proc: process(clk125)
     begin
@@ -246,5 +250,14 @@ begin
             idelayctrl_reset_clk500 <= idelayctrl_reset;
         end if;
     end process clk500_resync_proc;
+
+    clock_resync_proc: process(clock)
+    begin
+        if rising_edge(clk500) then
+            trig_reg <= trig_axi;
+        end if;
+    end process clock_resync_proc;
+
+    trig <= trig_reg;
 
 end fe_arch;

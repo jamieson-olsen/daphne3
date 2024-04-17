@@ -1,7 +1,44 @@
 -- fe_axi.vhd
--- daphne v3 front end control registers
+-- daphne v3 front end control and status registers
 -- adapted from the Vivado example/skeleton AXI-LITE interface sources
+--
 -- Jamieson Olsen <jamieson@fnal.gov>
+--
+-- all register access is 32 bit data (AXI-LITE requirement)
+-- there are 13 32-bit registers here
+--
+-- base + 0 = Control Register R/W
+--    bit 2 = idelay_en_vtc 
+--    bit 1 = iserdes_reset
+--    bit 0 = idelayctrl_reset
+
+-- base + 4 = Status Register R/O
+--    bit 0 = idelayctrl_ready
+
+-- Write anything to the Trigger Register to force a momentary pulse 
+-- on the TRIG output. This will force the SPY BUFFERS to capture the
+-- raw input data. This register is write only and the data doesn't matter.
+-- 
+-- base + 8 = Trigger Register W/O 
+
+-- IDELAY delay tap value is the lower 9 bits of these 32 bit registers
+-- these registers are R/W. When any of these registers are written a momentary 
+-- load pulse (two AXI clocks wide) will be generated on the corresponding
+-- output idelay_load()
+--
+-- base + 12 = AFE0 Delay Tap Register
+-- base + 16 = AFE1 Delay Tap Register
+-- base + 20 = AFE2 Delay Tap Register
+-- base + 24 = AFE3 Delay Tap Register
+-- base + 28 = AFE4 Delay Tap Register
+
+-- ISERDES bitslip value is the lower 4 bits of this 32 bit register it is R/W
+-- 
+-- base + 32 = AFE0 Bitslip Register
+-- base + 36 = AFE1 Bitslip Register
+-- base + 40 = AFE2 Bitslip Register
+-- base + 44 = AFE3 Bitslip Register
+-- base + 48 = AFE4 Bitslip Register
 
 library ieee;
 use ieee.std_logic_1164.all;
@@ -34,7 +71,7 @@ entity fe_axi is
 		S_AXI_RVALID	: out std_logic;
 		S_AXI_RREADY	: in std_logic;
 
-        -- signals used by the front end 
+        -- signals used by the front end, sync to S_AXI_ACLK
 
         idelayctrl_ready: in std_logic;
         idelay_tap: out array_5x9_type;
@@ -42,8 +79,8 @@ entity fe_axi is
         iserdes_bitslip: out array_5x4_type;
         iserdes_reset: out std_logic;
         idelayctrl_reset: out std_logic;
-        idelay_en_vtc: out std_logic
-
+        idelay_en_vtc: out std_logic;
+        trig: out std_logic
 	);
 end fe_axi;
 
@@ -68,7 +105,24 @@ architecture fe_axi_arch of fe_axi is
 	signal idelay_tap_reg: array_5x9_type;
     signal idelay_load0_reg, idelay_load1_reg: std_logic_vector(4 downto 0) := "00000";
     signal iserdes_bitslip_reg: array_5x4_type;
-    signal fe_control_reg: std_logic_vector(31 downto 0) := (others=>'0');
+    signal control_reg: std_logic_vector(31 downto 0) := (others=>'0');
+    signal trig0_reg, trig1_reg: std_logic := '0';
+
+    -- register offsets are relative to the base address specified for this AXI-LITE slave instance
+
+    constant CTRL_OFFSET: std_logic_vector(5 downto 0) := "000000";
+    constant STAT_OFFSET: std_logic_vector(5 downto 0) := "000100";
+    constant TRIG_OFFSET: std_logic_vector(5 downto 0) := "001000";
+    constant TAP0_OFFSET: std_logic_vector(5 downto 0) := "001100";
+    constant TAP1_OFFSET: std_logic_vector(5 downto 0) := "010000";
+    constant TAP2_OFFSET: std_logic_vector(5 downto 0) := "010100";
+    constant TAP3_OFFSET: std_logic_vector(5 downto 0) := "011000";
+    constant TAP4_OFFSET: std_logic_vector(5 downto 0) := "011100";
+    constant SLP0_OFFSET: std_logic_vector(5 downto 0) := "100000";
+    constant SLP1_OFFSET: std_logic_vector(5 downto 0) := "100100";
+    constant SLP2_OFFSET: std_logic_vector(5 downto 0) := "101000";
+    constant SLP3_OFFSET: std_logic_vector(5 downto 0) := "101100";
+    constant SLP4_OFFSET: std_logic_vector(5 downto 0) := "110000";
 
 begin
 
@@ -178,68 +232,58 @@ begin
           iserdes_bitslip_reg(2) <= (others=>'0');
           iserdes_bitslip_reg(3) <= (others=>'0');
           iserdes_bitslip_reg(4) <= (others=>'0');
-          fe_control_reg <= (others=>'0');
+          control_reg <= (others=>'0');
 	    else
-	      if (reg_wren = '1') then
+	      if (reg_wren = '1' and S_AXI_WSTRB = "1111") then
 
             -- treat all of these register writes as if they are full 32 bits
             -- e.g. the four write strobe bits should be high
 
-	        case (axi_awaddr) is
+	        case ( axi_awaddr(5 downto 0) ) is
 
-	          when FE_CTRL_ADDR => 
-                if ( S_AXI_WSTRB = "1111" ) then
-                    fe_control_reg <= S_AXI_WDATA;
-                end if;
-	          when FE_AFE0_TAP_ADDR => 
-                if ( S_AXI_WSTRB = "1111" ) then
-                    idelay_tap_reg(0) <= S_AXI_WDATA(8 downto 0);
-                    idelay_load0_reg(0) <= '1';
-                end if;
-	          when FE_AFE1_TAP_ADDR =>
-                if ( S_AXI_WSTRB = "1111" ) then 
-                    idelay_tap_reg(1) <= S_AXI_WDATA(8 downto 0);
-                    idelay_load0_reg(1) <= '1';
-                end if;
-	          when FE_AFE2_TAP_ADDR =>
-                if ( S_AXI_WSTRB = "1111" ) then
-                    idelay_tap_reg(2) <= S_AXI_WDATA(8 downto 0);
-                    idelay_load0_reg(2) <= '1';
-                end if;
-	          when FE_AFE3_TAP_ADDR =>
-                if ( S_AXI_WSTRB = "1111" ) then
-                    idelay_tap_reg(3) <= S_AXI_WDATA(8 downto 0);
-                    idelay_load0_reg(3) <= '1';
-                end if;
-	          when FE_AFE4_TAP_ADDR => 
-                if ( S_AXI_WSTRB = "1111" ) then
-                    idelay_tap_reg(4) <= S_AXI_WDATA(8 downto 0);
-                    idelay_load0_reg(4) <= '1';
-                end if;
+	          when CTRL_OFFSET => 
+                control_reg <= S_AXI_WDATA;
 
-              when FE_AFE0_BITSLIP_ADDR =>
-                if ( S_AXI_WSTRB = "1111" ) then
-                    iserdes_bitslip_reg(0) <= S_AXI_WDATA(3 downto 0);
-                end if;
-              when FE_AFE1_BITSLIP_ADDR =>
-                if ( S_AXI_WSTRB = "1111" ) then
-                    iserdes_bitslip_reg(1) <= S_AXI_WDATA(3 downto 0);
-                end if;
-              when FE_AFE2_BITSLIP_ADDR =>
-                if ( S_AXI_WSTRB = "1111" ) then
-                    iserdes_bitslip_reg(2) <= S_AXI_WDATA(3 downto 0);
-                end if;
-              when FE_AFE3_BITSLIP_ADDR =>
-                if ( S_AXI_WSTRB = "1111" ) then
-                    iserdes_bitslip_reg(3) <= S_AXI_WDATA(3 downto 0);
-                end if;
-              when FE_AFE4_BITSLIP_ADDR =>  
-                if ( S_AXI_WSTRB = "1111" ) then
-                    iserdes_bitslip_reg(4) <= S_AXI_WDATA(3 downto 0);
-                end if;
+	          when TRIG_OFFSET => 
+                trig0_reg <= '1';
+
+	          when TAP0_OFFSET => 
+                idelay_tap_reg(0) <= S_AXI_WDATA(8 downto 0);
+                idelay_load0_reg(0) <= '1';
+
+	          when TAP1_OFFSET => 
+                idelay_tap_reg(1) <= S_AXI_WDATA(8 downto 0);
+                idelay_load0_reg(1) <= '1';
+
+	          when TAP2_OFFSET => 
+                idelay_tap_reg(2) <= S_AXI_WDATA(8 downto 0);
+                idelay_load0_reg(2) <= '1';
+
+	          when TAP3_OFFSET => 
+                idelay_tap_reg(3) <= S_AXI_WDATA(8 downto 0);
+                idelay_load0_reg(3) <= '1';
+
+	          when TAP4_OFFSET => 
+                idelay_tap_reg(4) <= S_AXI_WDATA(8 downto 0);
+                idelay_load0_reg(4) <= '1';
+
+              when SLP0_OFFSET =>
+                iserdes_bitslip_reg(0) <= S_AXI_WDATA(3 downto 0);
+
+              when SLP1_OFFSET =>
+                iserdes_bitslip_reg(1) <= S_AXI_WDATA(3 downto 0);
+
+              when SLP2_OFFSET =>
+                iserdes_bitslip_reg(2) <= S_AXI_WDATA(3 downto 0);
+
+              when SLP3_OFFSET =>
+                iserdes_bitslip_reg(3) <= S_AXI_WDATA(3 downto 0);
+
+              when SLP4_OFFSET =>
+                iserdes_bitslip_reg(4) <= S_AXI_WDATA(3 downto 0);
 
 	          when others =>
-                fe_control_reg <= fe_control_reg;
+                control_reg <= control_reg;
                 idelay_tap_reg(0) <= idelay_tap_reg(0);
                 idelay_tap_reg(1) <= idelay_tap_reg(1);
                 idelay_tap_reg(2) <= idelay_tap_reg(2);
@@ -250,11 +294,11 @@ begin
                 iserdes_bitslip_reg(2) <= iserdes_bitslip_reg(2);
                 iserdes_bitslip_reg(3) <= iserdes_bitslip_reg(3);
                 iserdes_bitslip_reg(4) <= iserdes_bitslip_reg(4);
-
+                trig1_reg <= trig0_reg; -- momentary + self clearing
+                trig0_reg <= '0'; 
+                idelay_load1_reg <= idelay_load0_reg; -- momentary + self clearing
+                idelay_load0_reg <= "00000";
 	        end case;
-          else
-            idelay_load1_reg <= idelay_load0_reg;
-            idelay_load0_reg <= "00000";
 	      end if;
 	    end if;
 	  end if;                   
@@ -343,18 +387,21 @@ begin
 
 	reg_rden <= axi_arready and S_AXI_ARVALID and (not axi_rvalid) ;
 
-    reg_data_out <= fe_control_reg when (axi_araddr=FE_CTRL_ADDR) else
-                    X"0000000" & "000" & idelayctrl_ready when (axi_araddr=FE_STAT_ADDR) else
-                    X"00000" & "000" & idelay_tap_reg(0) when (axi_araddr=FE_AFE0_TAP_ADDR) else
-                    X"00000" & "000" & idelay_tap_reg(1) when (axi_araddr=FE_AFE1_TAP_ADDR) else
-                    X"00000" & "000" & idelay_tap_reg(2) when (axi_araddr=FE_AFE2_TAP_ADDR) else
-                    X"00000" & "000" & idelay_tap_reg(3) when (axi_araddr=FE_AFE3_TAP_ADDR) else
-                    X"00000" & "000" & idelay_tap_reg(4) when (axi_araddr=FE_AFE4_TAP_ADDR) else
-                    X"0000000" & iserdes_bitslip_reg(0) when (axi_araddr=FE_AFE0_BITSLIP_ADDR) else
-                    X"0000000" & iserdes_bitslip_reg(1) when (axi_araddr=FE_AFE1_BITSLIP_ADDR) else
-                    X"0000000" & iserdes_bitslip_reg(2) when (axi_araddr=FE_AFE2_BITSLIP_ADDR) else
-                    X"0000000" & iserdes_bitslip_reg(3) when (axi_araddr=FE_AFE3_BITSLIP_ADDR) else
-                    X"0000000" & iserdes_bitslip_reg(4) when (axi_araddr=FE_AFE4_BITSLIP_ADDR) else
+    reg_data_out <= control_reg                        when (axi_araddr(5 downto 0)=CTRL_OFFSET) else
+                    X"0000000" & "000" & idelayctrl_ready when (axi_araddr(5 downto 0)=STAT_OFFSET) else
+
+                    X"00000" & "000" & idelay_tap_reg(0) when (axi_araddr(5 downto 0)=TAP0_OFFSET) else
+                    X"00000" & "000" & idelay_tap_reg(1) when (axi_araddr(5 downto 0)=TAP1_OFFSET) else
+                    X"00000" & "000" & idelay_tap_reg(2) when (axi_araddr(5 downto 0)=TAP2_OFFSET) else
+                    X"00000" & "000" & idelay_tap_reg(3) when (axi_araddr(5 downto 0)=TAP3_OFFSET) else
+                    X"00000" & "000" & idelay_tap_reg(4) when (axi_araddr(5 downto 0)=TAP4_OFFSET) else
+
+                    X"0000000" & iserdes_bitslip_reg(0) when (axi_araddr(5 downto 0)=SLP0_OFFSET) else
+                    X"0000000" & iserdes_bitslip_reg(1) when (axi_araddr(5 downto 0)=SLP1_OFFSET) else
+                    X"0000000" & iserdes_bitslip_reg(2) when (axi_araddr(5 downto 0)=SLP2_OFFSET) else
+                    X"0000000" & iserdes_bitslip_reg(3) when (axi_araddr(5 downto 0)=SLP3_OFFSET) else
+                    X"0000000" & iserdes_bitslip_reg(4) when (axi_araddr(5 downto 0)=SLP4_OFFSET) else
+
                     X"00000000";
 
 	-- Output register or memory read data
@@ -375,9 +422,11 @@ begin
 	  end if;
 	end process;
 
-    idelay_en_vtc <= fe_control_reg(2);
-    iserdes_reset <= fe_control_reg(1);
-    idelayctrl_reset <= fe_control_reg(0);
+    trig <= trig1_reg or trig0_reg; -- momentary pulse, only 2 AXI clks wide
+
+    idelay_en_vtc <= control_reg(2);
+    iserdes_reset <= control_reg(1);
+    idelayctrl_reset <= control_reg(0);
 
     idelay_tap(0) <= idelay_tap_reg(0);
     idelay_tap(1) <= idelay_tap_reg(1);
@@ -385,9 +434,7 @@ begin
     idelay_tap(3) <= idelay_tap_reg(3);
     idelay_tap(4) <= idelay_tap_reg(4);
 
-    -- this load pulse is momentary, only two AXI clocks wide...
-
-    idelay_load <= idelay_load1_reg or idelay_load0_reg; 
+    idelay_load <= idelay_load1_reg or idelay_load0_reg; -- momentary pulse, only 2 AXI clks wide
 
     iserdes_bitslip(0) <= iserdes_bitslip_reg(0);
     iserdes_bitslip(1) <= iserdes_bitslip_reg(1);
