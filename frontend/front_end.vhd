@@ -10,7 +10,9 @@
 -- each AFE group (5 total). The assumption is that signals within an AFE group are tightly 
 -- matched on the PCB layout. So make adjustments to get the FCLK pattern properly aligned, then
 -- those same settings will automatically be applied to all other bits in the group.
-
+--
+-- NOTE: AFEs must be configured for 16 bit transmission mode, LSb First!
+--
 -- The suggested calibration procedure is:
 --
 -- 0. disable IDELAY voltage/temperature compensation (EN_VTC=0)

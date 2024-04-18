@@ -23,7 +23,7 @@ The spy buffer AXI-LITE interface will need to be configured for a base address 
 
 ## Timing Endpoint
 
-The timing endpoint firmware is largely unchanged since DAPHNEv2. The output clocks have changed to include 125MHz and the high speed clock changes from 437.5MHz to 500MHz. Endpoint registers are now accessed through an AXI-LITE interface.
+The timing endpoint firmware is largely unchanged since DAPHNEv2. The output clocks have changed to include 125MHz and the high speed clock changes from 437.5MHz to 500MHz. Endpoint registers are now accessed through an AXI-LITE interface. Note that the AXI registers have changed, there are now fewer registers: clock control register, clock status register, endpoint control register, and endpoint status register. For details see timing/ep_axi.vhd
 
 ## VHDL Package
 

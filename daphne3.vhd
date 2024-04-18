@@ -18,15 +18,15 @@ entity DAPHNE3 is
 -- generic(version: std_logic_vector(27 downto 0) := X"1234567"); -- git commit number is passed in from tcl build script
 port(
 
-    -- PL/PS internal signals 
+    reset_async: in std_logic; -- async hard reset from the PS
+    sysclk100:   in  std_logic; -- 100MHz constant sysclk from oscillator or PS
 
-    reset: in std_logic; -- async reset from the PS
+    -- timing interface signals (connect to IO pins)
 
-    clock:   in  std_logic; -- 62.5MHz master clock
-    clk125:  in  std_logic; -- 125MHz byte clock
-    clk500:  in  std_logic; -- 500MHz bit clock
-
-    ts: std_logic_vector(63 downto 0); -- timestamp sync to clock
+    sfp_tmg_los: in std_logic; -- loss of signal
+    rx0_tmg_p, rx0_tmg_n: in std_logic; -- LVDS recovered serial data ACKCHYUALLY the clock!
+    sfp_tmg_tx_dis: out std_logic; -- high to disable timing SFP TX
+    tx0_tmg_p, tx0_tmg_n: out std_logic; -- send 
 
     -- AFE LVDS high speed data interface (connect to IO pins)
 
@@ -84,7 +84,31 @@ port(
     FE_AXI_RDATA: out std_logic_vector(31 downto 0);
     FE_AXI_RRESP: out std_logic_vector(1 downto 0);
     FE_AXI_RVALID: out std_logic;
-    FE_AXI_RREADY: in std_logic
+    FE_AXI_RREADY: in std_logic;
+
+    -- AXI-Lite interface for the timing endpoint and clock registers
+
+    EP_AXI_ACLK: in std_logic;
+    EP_AXI_ARESETN: in std_logic;
+    EP_AXI_AWADDR: in std_logic_vector(31 downto 0);
+    EP_AXI_AWPROT: in std_logic_vector(2 downto 0);
+    EP_AXI_AWVALID: in std_logic;
+    EP_AXI_AWREADY: out std_logic;
+    EP_AXI_WDATA: in std_logic_vector(31 downto 0);
+    EP_AXI_WSTRB: in std_logic_vector(3 downto 0);
+    EP_AXI_WVALID: in std_logic;
+    EP_AXI_WREADY: out std_logic;
+    EP_AXI_BRESP: out std_logic_vector(1 downto 0);
+    EP_AXI_BVALID: out std_logic;
+    EP_AXI_BREADY: in std_logic;
+    EP_AXI_ARADDR: in std_logic_vector(31 downto 0);
+    EP_AXI_ARPROT: in std_logic_vector(2 downto 0);
+    EP_AXI_ARVALID: in std_logic;
+    EP_AXI_ARREADY: out std_logic;
+    EP_AXI_RDATA: out std_logic_vector(31 downto 0);
+    EP_AXI_RRESP: out std_logic_vector(1 downto 0);
+    EP_AXI_RVALID: out std_logic;
+    EP_AXI_RREADY: in std_logic
 
   );
 end DAPHNE3;
@@ -139,7 +163,7 @@ port(
     reset: in std_logic; -- active high reset async
     trig:  in std_logic; -- trigger pulse sync to clock
     din:   in array_5x9x16_type; -- AFE data sync to clock
-    ts:    in std_logic_vector(63 downto 0); -- timestamp sync to clock
+    timestamp: in std_logic_vector(63 downto 0); -- timestamp sync to clock
     
     -- AXI-LITE interface
 
@@ -167,9 +191,60 @@ port(
   );
 end component;
 
+component endpoint
+port(
+
+    sysclk100:   in std_logic;  -- 100MHz constant system clock from PS or oscillator
+    reset_async: in std_logic;  -- async hard reset from the PS
+    soft_reset:  out std_logic;  -- soft reset from user sync to axi clock
+
+    -- external optical timing SFP link interface
+
+    sfp_tmg_los: in std_logic; -- loss of signal
+    rx0_tmg_p, rx0_tmg_n: in std_logic; -- LVDS recovered serial data ACKCHYUALLY the clock!
+    sfp_tmg_tx_dis: out std_logic; -- high to disable timing SFP TX
+    tx0_tmg_p, tx0_tmg_n: out std_logic; -- send data upstream
+
+    -- output clocks used by PL logic
+
+    clock:   out std_logic;  -- master clock 62.5MHz
+    clk500:  out std_logic;  -- front end clock 500MHz
+    clk125:  out std_logic;  -- front end clock 125MHz
+    
+    timestamp: out std_logic_vector(63 downto 0); -- sync to mclk
+
+    -- AXI-Lite interface for the control/status registers
+
+	S_AXI_ACLK: in std_logic;
+	S_AXI_ARESETN: in std_logic;
+	S_AXI_AWADDR: in std_logic_vector(31 downto 0);
+	S_AXI_AWPROT: in std_logic_vector(2 downto 0);
+	S_AXI_AWVALID: in std_logic;
+	S_AXI_AWREADY: out std_logic;
+	S_AXI_WDATA: in std_logic_vector(31 downto 0);
+	S_AXI_WSTRB: in std_logic_vector(3 downto 0);
+	S_AXI_WVALID: in std_logic;
+	S_AXI_WREADY: out std_logic;
+	S_AXI_BRESP: out std_logic_vector(1 downto 0);
+	S_AXI_BVALID: out std_logic;
+	S_AXI_BREADY: in std_logic;
+	S_AXI_ARADDR: in std_logic_vector(31 downto 0);
+	S_AXI_ARPROT: in std_logic_vector(2 downto 0);
+	S_AXI_ARVALID: in std_logic;
+	S_AXI_ARREADY: out std_logic;
+	S_AXI_RDATA: out std_logic_vector(31 downto 0);
+	S_AXI_RRESP: out std_logic_vector(1 downto 0);
+	S_AXI_RVALID: out std_logic;
+	S_AXI_RREADY: in std_logic
+);
+end component;
+
 signal afe_p_array, afe_n_array: array_5x9_type;
 signal din_array: array_5x9x16_type;
 signal trig: std_logic;
+signal timestamp: std_logic_vector(63 downto 0);
+signal clock, clk125, clk500: std_logic;
+signal soft_reset: std_logic;
 
 begin
 
@@ -224,10 +299,10 @@ port map(
 spybuffers_inst: spybuffers
 port map(
     clock => clock,
-    reset => reset,
+    reset => soft_reset,
     trig => trig,
     din => din_array, -- array_5x9x16_type
-    ts => ts,
+    timestamp => timestamp,
 	S_AXI_ACLK	    => SB_AXI_ACLK,
 	S_AXI_ARESETN	=> SB_AXI_ARESETN,
 	S_AXI_AWADDR	=> SB_AXI_AWADDR,
@@ -250,5 +325,48 @@ port map(
 	S_AXI_RVALID	=> SB_AXI_RVALID,
 	S_AXI_RREADY	=> SB_AXI_RREADY
   );
+
+endpoint_inst: endpoint
+port map(
+
+    sysclk100 => sysclk100, -- 100MHz system clock
+    reset_async => reset_async, -- hard async reset from PS
+    soft_reset => soft_reset, -- user soft reset for front end and core
+
+    sfp_tmg_los => sfp_tmg_los, -- timing endpoint sfp signals
+    rx0_tmg_p => rx0_tmg_p,
+    rx0_tmg_n => rx0_tmg_n,
+    sfp_tmg_tx_dis => sfp_tmg_tx_dis,
+    tx0_tmg_p => tx0_tmg_p,
+    tx0_tmg_n => tx0_tmg_n,
+
+    clock  => clock,
+    clk500 => clk500,
+    clk125 => clk125,
+    
+    timestamp => timestamp, -- sync to clock
+
+	S_AXI_ACLK	    => EP_AXI_ACLK,
+	S_AXI_ARESETN	=> EP_AXI_ARESETN,
+	S_AXI_AWADDR	=> EP_AXI_AWADDR,
+	S_AXI_AWPROT	=> EP_AXI_AWPROT,
+	S_AXI_AWVALID	=> EP_AXI_AWVALID,
+	S_AXI_AWREADY	=> EP_AXI_AWREADY,
+	S_AXI_WDATA	    => EP_AXI_WDATA,
+	S_AXI_WSTRB	    => EP_AXI_WSTRB,
+	S_AXI_WVALID	=> EP_AXI_WVALID,
+	S_AXI_WREADY	=> EP_AXI_WREADY,
+	S_AXI_BRESP	    => EP_AXI_BRESP,
+	S_AXI_BVALID	=> EP_AXI_BVALID,
+	S_AXI_BREADY	=> EP_AXI_BREADY,
+	S_AXI_ARADDR	=> EP_AXI_ARADDR,
+	S_AXI_ARPROT	=> EP_AXI_ARPROT,
+	S_AXI_ARVALID	=> EP_AXI_ARVALID,
+	S_AXI_ARREADY	=> EP_AXI_ARREADY,
+	S_AXI_RDATA	    => EP_AXI_RDATA,
+	S_AXI_RRESP	    => EP_AXI_RRESP,
+	S_AXI_RVALID	=> EP_AXI_RVALID,
+	S_AXI_RREADY	=> EP_AXI_RREADY
+);
 
 end DAPHNE3_arch;

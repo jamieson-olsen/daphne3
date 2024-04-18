@@ -23,14 +23,9 @@ use unisim.vcomponents.all;
 entity endpoint is
 port(
 
-    -- differential external 100MHz sysclk LVDS
-    -- sysclk_p: in std_logic;
-    -- sysclk_n: in std_logic; 
-
-    -- OR use single ended sysclk available on Zynq UltraScale+ PL
-    sysclk: in std_logic; 
-
-    reset_async: in std_logic; -- async hard reset from the PS
+    sysclk100:   in std_logic;  -- 100MHz constant system clock from PS or oscillator
+    reset_async: in std_logic;  -- async hard reset from the PS
+    soft_reset:  out std_logic;  -- soft reset from user sync to axi clock
 
     -- external optical timing SFP link interface
 
@@ -39,61 +34,98 @@ port(
     sfp_tmg_tx_dis: out std_logic; -- high to disable timing SFP TX
     tx0_tmg_p, tx0_tmg_n: out std_logic; -- send data upstream
 
-    -- timing endpoint interface 
-
-    ep_reset: in std_logic; -- soft reset endpoint logic
-    ep_addr: in std_logic_vector(15 downto 0); -- endpoint address
-    ep_ts_rdy: out std_logic; -- endpoint timestamp is good
-    ep_stat: out std_logic_vector(3 downto 0); -- endpoint state bits
-
-    -- misc interface signals
-
-    mmcm1_reset: in std_logic;
-    mmcm1_locked: out std_logic;
-    mmcm0_locked: out std_logic;
-
-    -- use_ep switches between local and endpoint clocks 
-    -- 0 = run on local clocks with fake timestamp
-    -- 1 = use endpoint clocks and real timestamp
-
-    use_ep: in std_logic; 
-
-    -- output clocks used by PL logic
+    -- output clocks used by daphne3 logic
 
     clock:   out std_logic;  -- master clock 62.5MHz
     clk500:  out std_logic;  -- front end clock 500MHz
     clk125:  out std_logic;  -- front end clock 125MHz
-    clk200:  out std_logic;  -- system clock 200MHz
-    clk100:  out std_logic;  -- system clock 100MHz
     
-    timestamp: out std_logic_vector(63 downto 0) -- sync to mclk
+    timestamp: out std_logic_vector(63 downto 0); -- sync to clock
 
-  );
+    -- AXI-Lite interface for the control/status registers
+
+	S_AXI_ACLK: in std_logic;
+	S_AXI_ARESETN: in std_logic;
+	S_AXI_AWADDR: in std_logic_vector(31 downto 0);
+	S_AXI_AWPROT: in std_logic_vector(2 downto 0);
+	S_AXI_AWVALID: in std_logic;
+	S_AXI_AWREADY: out std_logic;
+	S_AXI_WDATA: in std_logic_vector(31 downto 0);
+	S_AXI_WSTRB: in std_logic_vector(3 downto 0);
+	S_AXI_WVALID: in std_logic;
+	S_AXI_WREADY: out std_logic;
+	S_AXI_BRESP: out std_logic_vector(1 downto 0);
+	S_AXI_BVALID: out std_logic;
+	S_AXI_BREADY: in std_logic;
+	S_AXI_ARADDR: in std_logic_vector(31 downto 0);
+	S_AXI_ARPROT: in std_logic_vector(2 downto 0);
+	S_AXI_ARVALID: in std_logic;
+	S_AXI_ARREADY: out std_logic;
+	S_AXI_RDATA: out std_logic_vector(31 downto 0);
+	S_AXI_RRESP: out std_logic_vector(1 downto 0);
+	S_AXI_RVALID: out std_logic;
+	S_AXI_RREADY: in std_logic
+);
 end endpoint;
 
 architecture endpoint_arch of endpoint is
 
 component pdts_endpoint_wrapper is -- wrapped and cleaned up for DAPHNE V2a design
-	port(
-		sys_clk: in std_logic; -- System clock is 100MHz
-		sys_rst: in std_logic; -- System reset (sclk domain)
-		sys_stat: out std_logic_vector(3 downto 0); -- Status output (sclk domain)
-        sys_addr: in std_logic_vector(15 downto 0);
-		los: in std_logic := '0'; -- External signal path status (async)
-		rxd: in std_logic; -- Timing input (clk domain)
-		txd: out std_logic; -- Timing output (clk domain)
-		txenb: out std_logic; -- Timing output enable (active low for SFP) (clk domain)
-		clk: out std_logic; -- Base clock output is 62.5MHz
-		rst: out std_logic; -- Base clock reset (clk domain)
-		ready: out std_logic; -- Endpoint ready flag (clk domain)
-		tstamp: out std_logic_vector(63 downto 0) -- Timestamp (clk domain)
-	);
+port(
+    sys_clk: in std_logic; -- System clock is 100MHz
+    sys_rst: in std_logic; -- System reset (sclk domain)
+    sys_stat: out std_logic_vector(3 downto 0); -- Status output (sclk domain)
+    sys_addr: in std_logic_vector(15 downto 0);
+    los: in std_logic := '0'; -- External signal path status (async)
+    rxd: in std_logic; -- Timing input (clk domain)
+    txd: out std_logic; -- Timing output (clk domain)
+    txenb: out std_logic; -- Timing output enable (active low for SFP) (clk domain)
+    clk: out std_logic; -- Base clock output is 62.5MHz
+    rst: out std_logic; -- Base clock reset (clk domain)
+    ready: out std_logic; -- Endpoint ready flag (clk domain)
+    tstamp: out std_logic_vector(63 downto 0) -- Timestamp (clk domain)
+);
 end component;
 
-signal sysclk_ibuf: std_logic;
+component ep_axi is
+port(
+    S_AXI_ACLK: in std_logic;
+    S_AXI_ARESETN: in std_logic;
+    S_AXI_AWADDR: in std_logic_vector(31 downto 0);
+    S_AXI_AWPROT: in std_logic_vector(2 downto 0);
+    S_AXI_AWVALID: in std_logic;
+    S_AXI_AWREADY: out std_logic;
+    S_AXI_WDATA: in std_logic_vector(31 downto 0);
+    S_AXI_WSTRB: in std_logic_vector(3 downto 0);
+    S_AXI_WVALID: in std_logic;
+    S_AXI_WREADY: out std_logic;
+    S_AXI_BRESP: out std_logic_vector(1 downto 0);
+    S_AXI_BVALID: out std_logic;
+    S_AXI_BREADY: in std_logic;
+    S_AXI_ARADDR: in std_logic_vector(31 downto 0);
+    S_AXI_ARPROT: in std_logic_vector(2 downto 0);
+    S_AXI_ARVALID: in std_logic;
+    S_AXI_ARREADY: out std_logic;
+    S_AXI_RDATA: out std_logic_vector(31 downto 0);
+    S_AXI_RRESP: out std_logic_vector(1 downto 0);
+    S_AXI_RVALID: out std_logic;
+    S_AXI_RREADY: in std_logic;
+    ep_ts_rdy: in std_logic;
+    ep_stat: in std_logic_vector(3 downto 0);
+    mmcm0_locked: in std_logic;
+    mmcm1_locked: in std_logic;
+    ep_reset: out std_logic;
+    ep_addr: out std_logic_vector(15 downto 0);
+    soft_reset: out std_logic;
+    mmcm1_reset: out std_logic;
+    use_ep: out std_logic
+);
+end component;
+
+-- signal sysclk100_ibuf: std_logic;
 signal mmcm0_clkfbout, mmcm0_clkfbout_buf: std_logic;
 signal mmcm0_clkout0: std_logic;
-signal mmcm0_clkout1: std_logic;
+-- signal mmcm0_clkout1: std_logic;
 signal mmcm0_clkout2: std_logic;
 signal local_clk62p5: std_logic;
 signal clk100_i: std_logic;
@@ -104,6 +136,15 @@ signal ep_clk62p5: std_logic;
 signal mmcm1_clkfbout, mmcm1_clkfbout_buf: std_logic;
 signal mmcm1_clkout0, mmcm1_clkout1, mmcm1_clkout2: std_logic;
 signal clock_i: std_logic;
+
+signal mmcm0_locked: std_logic;
+signal mmcm1_locked: std_logic;
+signal mmcm1_reset: std_logic;
+signal use_ep: std_logic;
+signal ep_stat: std_logic_vector(3 downto 0);
+signal ep_reset: std_logic;
+signal ep_ts_rdy: std_logic;
+signal ep_addr: std_logic_vector(15 downto 0);
 
 signal real_timestamp, fake_timestamp, timestamp_reg: std_logic_vector(63 downto 0);
 
@@ -142,7 +183,7 @@ port map(
     CLKFBOUTB           => open,
     CLKOUT0             => mmcm0_clkout0, -- 62.5MHz
     CLKOUT0B            => open,
-    CLKOUT1             => mmcm0_clkout1, -- 200MHz
+    CLKOUT1             => open, -- mmcm0_clkout1, -- 200MHz
     CLKOUT1B            => open,
     CLKOUT2             => mmcm0_clkout2, -- 100MHz
     CLKOUT2B            => open,     
@@ -152,7 +193,7 @@ port map(
     CLKOUT5             => open,
     CLKOUT6             => open,
     CLKFBIN             => mmcm0_clkfbout_buf,
-    CLKIN1              => sysclk,
+    CLKIN1              => sysclk100, -- 100 MHz system clock
     CLKIN2              => '0',
     CLKINSEL            => '1', -- high to use CLKIN1
     DADDR               => (others=>'0'),
@@ -177,11 +218,11 @@ mmcm0_clkfb_inst: BUFG port map( I => mmcm0_clkfbout, O => mmcm0_clkfbout_buf);
 
 mmcm0_clk0_inst:  BUFG port map( I => mmcm0_clkout0, O => local_clk62p5); -- local clock 62.5MHz
 
-mmcm0_clk1_inst:  BUFG port map( I => mmcm0_clkout1, O => clk200); -- system clock 200MHz
+-- mmcm0_clk1_inst:  BUFG port map( I => mmcm0_clkout1, O => clk200); -- system clock 200MHz
 
 mmcm_clk2_inst:  BUFG port map( I => mmcm0_clkout2, O => clk100_i);  -- system clock 100MHz
 
-clk100 <= clk100_i;
+--clk100 <= clk100_i;
 
 -- On DAPHNE V3 the timing system recevied clock comes directly 
 -- from the optical SFP receiver; there is no exernal CDR chip at all
@@ -322,5 +363,43 @@ begin
 end process ts_proc;
 
 timestamp <= timestamp_reg;
+
+-- AXI-LITE interface handles the control and status bits
+
+ep_axi_inst: ep_axi 
+port map(
+    S_AXI_ACLK => S_AXI_ACLK,
+    S_AXI_ARESETN => S_AXI_ARESETN,
+    S_AXI_AWADDR => S_AXI_AWADDR,
+    S_AXI_AWPROT => S_AXI_AWPROT,
+    S_AXI_AWVALID => S_AXI_AWVALID,
+    S_AXI_AWREADY => S_AXI_AWREADY,
+    S_AXI_WDATA => S_AXI_WDATA,
+    S_AXI_WSTRB => S_AXI_WSTRB,
+    S_AXI_WVALID => S_AXI_WVALID,
+    S_AXI_WREADY => S_AXI_WREADY,
+    S_AXI_BRESP => S_AXI_BRESP,
+    S_AXI_BVALID => S_AXI_BVALID,
+    S_AXI_BREADY => S_AXI_BREADY,
+    S_AXI_ARADDR => S_AXI_ARADDR,
+    S_AXI_ARPROT => S_AXI_ARPROT,
+    S_AXI_ARVALID => S_AXI_ARVALID,
+    S_AXI_ARREADY => S_AXI_ARREADY,
+    S_AXI_RDATA => S_AXI_RDATA,
+    S_AXI_RRESP => S_AXI_RRESP,
+    S_AXI_RVALID => S_AXI_RVALID,
+    S_AXI_RREADY => S_AXI_RREADY,
+
+    ep_ts_rdy => ep_ts_rdy,
+    ep_stat => ep_stat,
+    mmcm0_locked => mmcm0_locked,
+    mmcm1_locked => mmcm1_locked,
+
+    ep_reset => ep_reset,
+    ep_addr => ep_addr,
+    soft_reset => soft_reset,
+    mmcm1_reset => mmcm1_reset,
+    use_ep => use_ep
+);
 
 end endpoint_arch;

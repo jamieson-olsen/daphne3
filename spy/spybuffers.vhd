@@ -77,7 +77,7 @@ port(
     reset: in std_logic; -- active high reset async
     trig:  in std_logic; -- trigger pulse sync to clock
     din:   in array_5x9x16_type; -- AFE data sync to clock
-    ts:    in std_logic_vector(63 downto 0); -- timestamp sync to clock
+    timestamp: in std_logic_vector(63 downto 0); -- timestamp sync to clock
     
     -- AXI-LITE interface
 
@@ -184,7 +184,7 @@ begin
             clock => clock,
             reset => reset,
             trig  => trig,
-            data  => ts( 16*t+15 downto 16*t ),
+            data  => timestamp( 16*t+15 downto 16*t ),
     
             clka => S_AXI_ACLK,
             addra => addra,
