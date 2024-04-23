@@ -124,11 +124,8 @@ This is how one would do it in an OLD SCHOOL language like C. There is probably 
 
 	* write 0xE000 to address 2, TEST_PATTERN_MODES=111(RAMP)
 	* write 0x2000 to address 3, SERIALIZED_DATA_RATE=10(16X)
-	* write 0x0008 to address 4, ADC_RESOLUTION_SELECT=14 bit
-	*                            ADC_OUTPUT_FORMAT=offset binary
-	*                            LSB_MSB_FIRST=LSB first
+	* write 0x0008 to address 4, ADC_RESOLUTION_SELECT=14 bit, ADC_OUTPUT_FORMAT=offset binary, LSB_MSB_FIRST=LSB first
 	* write 0x0100 to address 10, SYNC_PATTERN=YES
-
 
 4a. Clear the "idelay_en_vtc" bit. This temporarily disables the circuitry that enables the IDELAY delay tap values to track changes in chip temperature and voltage. 
 
@@ -218,9 +215,7 @@ So for this AFE0 example the ideal tap value is 0x04E and the bitslip value is 3
 
 	* write 0x0000 to address 2, TEST_PATTERN_MODES=000(normal data)
 	* write 0x2000 to address 3, SERIALIZED_DATA_RATE=10(16X)
-	* write 0x0008 to address 4, ADC_RESOLUTION_SELECT=14 bit
-	*                            ADC_OUTPUT_FORMAT=offset binary
-	*                            LSB_MSB_FIRST=LSB first
+	* write 0x0008 to address 4, ADC_RESOLUTION_SELECT=14 bit, ADC_OUTPUT_FORMAT=offset binary, LSB_MSB_FIRST=LSB first
 	* write 0x0100 to address 10, SYNC_PATTERN=YES
 
 11. At any time you can trigger the spy buffers and read them out without impacting any physics operations on DAPHNE. Looking at AFE channel 8 frame marker is a good periodic check to verify that the front end alignment is working properly. 
