@@ -152,16 +152,25 @@ begin
 
     -- Forward the 62.5MHz master clock to the AFEs...
 
-    ODDR_inst: ODDR 
-    generic map( DDR_CLK_EDGE => "OPPOSITE_EDGE" )
+    --    ODDR_inst: ODDR 
+    --    generic map( DDR_CLK_EDGE => "OPPOSITE_EDGE" )
+    --    port map(
+    --        Q => clock_out_temp, 
+    --        C => clock,
+    --        CE => '1',
+    --        D1 => '1',
+    --        D2 => '0',
+    --        R  => '0',
+    --        S  => '0');
+
+    ODDR_inst: ODDRE1 
+    generic map( SIM_DEVICE => "ULTRASCALE_PLUS" )
     port map(
         Q => clock_out_temp, 
         C => clock,
-        CE => '1',
         D1 => '1',
         D2 => '0',
-        R  => '0',
-        S  => '0');
+        SR => '0');
 
     OBUFDS_inst: OBUFDS
         generic map(IOSTANDARD=>"LVDS")
