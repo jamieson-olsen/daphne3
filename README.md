@@ -1,11 +1,11 @@
-# daphne3
+# DAPHNE3 Firmware Overview
 Kria Zynq UltraScale+ firmware for the PL 
 
 This is not the complete firmware design for the Kria PL side, but rather some of the major components that will need to be instantiated at the top level.
 
 ## DAPHNE3 Entity
 
-Currently the Kria top level entity is a graphical schematic which has blocks for the PS, AXI interconnects, various IP blocks, and custom blocks. This entity, DAPHNE3 will become another block in this top level schematic. There are two AXI-LITE slave interfaces exposed: one for the Front End control register and another AXI-LITE slave interface for the spy buffers. Each of these interfaces will need to be connected to the AXI interconnects and assigned a base address. 
+Currently the Kria top level entity is a graphical schematic which has blocks for the PS, AXI interconnects, various IP blocks, and custom blocks. This entity, DAPHNE3 will become another block in this top level schematic. There are three AXI-LITE slave interfaces exposed: one for the Front End control register, another AXI-LITE slave interface for the spy buffers, and finally one AXI-LITE interface for configuring the timing endpoint. Each of these interfaces will need to be connected to the AXI interconnects and assigned a base address. 
 
 ## Front End 
 
@@ -80,10 +80,6 @@ The timing endpoint firmware is largely unchanged since DAPHNEv2. The output clo
 		bit 4: endpoint timestamp ok
 		bits 3..0: endpoint state machine status "good to go!"
 
-### Timing Endpoint Initialization
-
-Procedure TBD...
-
 ## VHDL Package
 
 This package file contains some constants and user defined data types.
@@ -92,7 +88,13 @@ This package file contains some constants and user defined data types.
 
 Constraints and other build related files will go in the xilinx directory.
 
-## Front End Alignment 
+# How To Do Stuff
+
+### Timing Endpoint Initialization
+
+Procedure TBD...
+
+## Front End Alignment Procedure
 
 The front end alignment primitives have changed quite a bit since the DAPHNEv2 (Artix 7) firmware was designed. But fundamentally the logic works the same way. Each AFE device has 8 data outputs and one "frame" marker output. The frame marker has the same timing as the data outputs, but it always outputs a fixed pattern "1111111100000000". The frame marker is considered to be a 9th data bit for each AFE. This frame pattern is the key for making the front end alignment work: whatever delays and bitslips are done to make the frame pattern look correct are automatically applied to the other 8 data bits from the same AFE chip. Since the routing delays on all 9 LVDS pairs (within an AFE) are tightly controlled on the layout, the data will then be properly aligned as well.
 
@@ -114,11 +116,13 @@ Now suppose you need to CLEAR bit 3 in a particular register. Do it like this:
 
 This is how one would do it in an OLD SCHOOL language like C. There is probably some very fancy simpler and much less error prone way to do it in more modern languages!
 
-## Front End Alignment Procedure
+### Preliminary Stuff
 
 1. Configure the timing endpoint and verify that is in a good state. Whenever the timing endpoint or timing master is reset, reconfigured, etc. this procedure will need to be repeated.
 
 2. Initialize the IDELAYCONTROL module. This module is responsible for making sure that the IDELAY delay tap values are calibrated in very small steps (a few picoseconds) and that these delays are constant over chip voltage and temperature changes. First set the "idelayctrl_reset" bit, then clear it. Now read the "idelayctrl_ready" status bit; it should be 1. That means that the IDELAY delay tap values are now calibrated.
+
+### Configure AFEs
 
 3. Configure all AFE chips using the SPI interface. There are several control bits that will need to be changed from the power on default values. From the AFE5808A datasheet:
 
@@ -127,9 +131,13 @@ This is how one would do it in an OLD SCHOOL language like C. There is probably 
 	* write 0x0008 to address 4, ADC_RESOLUTION_SELECT=14 bit, ADC_OUTPUT_FORMAT=offset binary, LSB_MSB_FIRST=LSB first
 	* write 0x0100 to address 10, SYNC_PATTERN=YES
 
+### Prepare ISERDES and IDELAY
+
 4a. Clear the "idelay_en_vtc" bit. This temporarily disables the circuitry that enables the IDELAY delay tap values to track changes in chip temperature and voltage. 
 
 4b. At this time it's a good idea to reset the ISERDES as well. Set and then clear iserdes_reset control bit.
+
+### Bit Alignment
 
 5. Now sweep the IDELAY tap values and look for the bit edges. There are 512 IDELAY tap values in 7ps steps. The AFE is operating at 62.5MHz and transmitting serial data at 16x, so the data rate is 1Gbps per LVDS pair, or a bit period of 1.0ns. Therefore the width of each data bit is equal to about 142 IDELAY taps.
 
@@ -170,6 +178,8 @@ Now you don't really care WHAT raw value is that was captured by the spy buffer.
 
 What we're looking for here is to find pair of bit edges. The first edge in this example happens around tap value 0x007 and the other edge happens around tap value 0x095. Note that these edges are separated by about 142 taps, just like we would expect. Good, now let's pick the ideal tap value by selecting something smack dab in the middle of the bit, say, tap value 78 or 0x04E. Write this value to the AFE Delay Tap register. OK now we're done with the fine adjustment for AFE0.
 
+### Word Alignment
+
 6. After completing the prior step we know that we are sampling the high speed data serial right in the center of the data bit, at the most reliable point. But we're not done yet. Now we will need to do the word alignment of the serial data. A high speed shift register is used for this operation. The high speed serial bits are flying down this shift register and we must grab 16 bits at just the right time to form the 16 bit parallel word properly. If we grab the bits one bit too early or one bit too late we'll accidentally grab a bit that belongs to a previous or next AFE sample. 
 
 This is where the BITSLIP operation comes in. We know that the frame maker always sends the same pattern "1111111100000000". So that's what we're looking for, using this simple loop:
@@ -207,9 +217,15 @@ So for this AFE0 example the ideal tap value is 0x04E and the bitslip value is 3
 
 7. Repeat steps 5 and 6 for the remaining AFE four chips.
 
+### Wrap up
+
 8. Set the "idelay_en_vtc" control bit. This will ensure that the IDELAY calibrated tap values stay in calibration over voltage and temperature changes. 
 
+### Verification
+
 9. Now the AFEs are still in "count up" test pattern mode. Let's check it all. Trigger the spy buffers, and dump them all out. AFE channels 0 to 7 should show values counting up by one, and AFE channel 8 should always be 0xFF00 for every sample. Remember, when you read a spy buffer you're reading 32 bits and there are two samples contained in each 32 bit word. The lower 16 bits is the older sample and the upper 16 bits is the newer sample.
+
+### Normal Data Taking Mode
 
 10. If everything looks good, let's put the AFEs into normal data taking mode by writing to the SPI interface. From the AFE5808A datasheet:
 
@@ -221,4 +237,7 @@ So for this AFE0 example the ideal tap value is 0x04E and the bitslip value is 3
 11. At any time you can trigger the spy buffers and read them out without impacting any physics operations on DAPHNE. Looking at AFE channel 8 frame marker is a good periodic check to verify that the front end alignment is working properly. 
 
 If there is down time and DAPHNE is not taking physics data, it should be possible to put the AFEs into one of the test modes (writing to AFE SPI address 2) and triggering the spy buffers to verify all data channels are properly aligned. Switching the AFE chips into and out of test pattern modes should not impact any timing so it is not likely this alignment procedure would need to be repeated each time the test pattern modes change in the AFE chips.
+
+
+
 
