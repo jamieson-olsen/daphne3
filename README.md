@@ -1,15 +1,22 @@
 # DAPHNE3 Firmware Overview
-Kria Zynq UltraScale+ firmware for the PL 
+Zynq UltraScale+ (Kria K26) firmware components for the PL 
 
-This is not the complete firmware design for the Kria PL side, but rather some of the major components that will need to be instantiated at the top level.
+This is not the complete firmware design, but rather some of the major components that will need to be instantiated at the top level of the PL "logic side" of the Zynq.
 
 ## DAPHNE3 Entity
 
-Currently the Kria top level entity is a graphical schematic which has blocks for the PS, AXI interconnects, various IP blocks, and custom blocks. This entity, DAPHNE3 will become another block in this top level schematic. There are three AXI-LITE slave interfaces exposed: one for the Front End control register, another AXI-LITE slave interface for the spy buffers, and finally one AXI-LITE interface for configuring the timing endpoint. Each of these interfaces will need to be connected to the AXI interconnects and assigned a base address. 
+Currently the Kria top level entity is a graphical schematic which has blocks for the PS, AXI interconnects, various IP and custom firmware blocks. This entity, DAPHNE3 will become another block in this top level schematic. This DAPHNE3 block is a wrapper containing the following firmware blocks:
 
-## Front End 
+* Front End Alignment and Synchronization Logic
+* Spy Buffers
+* Timing Endpoint
+* Core Logic (Self-triggered mode sender, streaming sender) + 10G transcievers
 
-The front end de-serialization and alignment logic has changed significantly since DAPHNEv2. In that version I had complex state machines to do the "automatic" alignment. These state machines have been removed and replaced with an AXI-LITE interface which provides access to 13 registers that control the front end logic. The idea here is that we will write a program (or script) that runs in Linux user space and this program controls the alignment process. This program will work closely with the spy buffers to capture, readout, and evaluate the alignment.
+There are three AXI-LITE slave interfaces exposed: one for the Front End control register, another AXI-LITE slave interface for the spy buffers, and finally one AXI-LITE interface for configuring the timing endpoint. Each of these interfaces will need to be connected to the AXI interconnects and assigned a base address. 
+
+## Front End Alignment
+
+The front end de-serialization and alignment logic has changed significantly since DAPHNE2. In that version I had complex state machines to do the "automatic" alignment. These state machines have been removed and replaced with an AXI-LITE interface which provides access to 13 registers that control the front end logic. The idea here is that we will write a program (or script) that runs in user-land and this program controls the alignment process. This program will work closely with the front end and spy buffers to capture, readout, and evaluate the alignment.
 
 ### Front End Registers
 
@@ -49,9 +56,19 @@ There are 13 32-bit registers that control the front end. Most registers are rea
 
 ## Spy Buffers
 
-The input spy buffers are deep enough to store 4k samples. The memory interface has changed from the custom GbE/Captan style to AXI-LITE. 
+The input spy buffers are deep enough to store 4k samples. The memory interface has changed significantly from the custom GbE/Captan style used on DAPHNE2 to AXI-LITE. 
 
-The spy buffer AXI-LITE interface will need to be configured for a base address (use anything that lines up with a 512k byte boundary), and how big the memory window should be (401408 bytes actual, use 512k bytes). See the file spybuffers.vhd for the complete memory map of the various spy buffers. All spy buffers are 32 bits wide, which means that two 16 bit samples are packed into each 32 bit word. Spy buffer memory blocks are read write. Normally one would not write anything into these buffers, as it would be instantly over-written when a trigger occurs. But writing something to these memory locations and reading it back can be a useful debug feature.
+### Base Address and Size
+
+The spy buffer AXI-LITE interface will need to be configured for a base address (use anything that lines up with a 512k byte boundary), and how big the memory window should be (401408 bytes actual, use 512k bytes). See the file spybuffers.vhd for the complete memory map of the various spy buffers. 
+
+### Data Packing
+
+All spy buffers are 32 bits wide, which means that two 16 bit samples are packed into each 32 bit word. The older sample goes in the lower 16 bits and the newer sample goes into the upper 16 bits. AFE ADC data is 14 bits, so there are two zeros padded into bits 15 and 14.
+
+### Buffer Access
+
+Spy buffer memory blocks are read write. Normally one would not write anything into these buffers, as it would be instantly over-written when a trigger occurs. But writing something to these memory locations and reading it back can be a useful debug feature.
 
 ## Timing Endpoint
 
@@ -80,11 +97,21 @@ The timing endpoint firmware is largely unchanged since DAPHNEv2. The output clo
 		bit 4: endpoint timestamp ok
 		bits 3..0: endpoint state machine status "good to go!"
 
-## VHDL Package
+## Core Logic
+
+Core logic details TBD...
+
+This sub-module contains the self-triggered sender and the streaming mode sender. This is the "physics" code in the design and will be changing frequently. The core logic operates in a single clock domain using the 62.5MHz master clock. 
+
+Sorting and merging functions are now handled by the core backend logic which includes the MGT high speed 10Gbps serializers. This backend logic is based on the WIB design and is maintained by UK Bristol firmware developers in a separate repository.
+
+## Misc Firmware Build Details
+
+### VHDL Package
 
 This package file contains some constants and user defined data types.
 
-## Constraints
+### Constraints
 
 Constraints and other build related files will go in the xilinx directory.
 
