@@ -3,7 +3,7 @@
 # define primary clocks...
 
 create_clock -name sysclk100    -period 10.000  [get_ports sysclk100]
-create_clock -name rx_tmg_clk   -period 8.000   [get_ports rx0_tmg_p]
+create_clock -name rx_tmg_clk   -period 16.000  [get_ports rx0_tmg_p]
 create_clock -name sb_axi_clk   -period 5.000   [get_ports SB_AXI_CLK]
 create_clock -name fe_axi_clk   -period 5.000   [get_ports FE_AXI_CLK]
 create_clock -name ep_axi_clk   -period 5.000   [get_ports EP_AXI_CLK]
