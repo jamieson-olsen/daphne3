@@ -1,18 +1,25 @@
 # DAPHNE3 Firmware Overview
-Zynq UltraScale+ (Kria K26) firmware components for the PL 
+Zynq UltraScale+ (Kria K26) firmware for the PL 
 
-This is not the complete firmware design, but rather some of the major components that will need to be instantiated at the top level of the PL "logic side" of the Zynq.
+This is the firmware design for the Zynq UltraScale+ Kria device, programmable logic (PL) side. The top level source has been changed from graphical to pure VHDL and the project type changed from regular Vivado project flow to Vivado non-project flow driven by a tcl build script.
 
-## DAPHNE3 Entity
+## DAPHNE3 Top Level
 
-Currently the Kria top level entity is a graphical schematic which has blocks for the PS, AXI interconnects, various IP and custom firmware blocks. This entity, DAPHNE3 will become another block in this top level schematic. This DAPHNE3 block is a wrapper containing the following firmware blocks:
+DAPHNE3.vhd consists of the following functional blocks:
 
-* Front End Alignment and Synchronization Logic
-* Spy Buffers
-* Timing Endpoint
-* Core Logic (Self-triggered mode sender, streaming sender) + 10G transcievers
+* Zynq PS (Xilinx IP)
+* AXI SmartConnect (Xilinx IP)
+* Front End Alignment and Synchronization Logic (RTL)
+* Spy Buffers (RTL)
+* Timing Endpoint (RTL)
+* SPI master for stand alone DAC chips (RTL)
+* SPI master for AFE chips and associated DAC chips (RTL)
+* SPI master for the current monitor (RTL)
+* I2C master for a bunch of devices (Xilinx IP)
+* Misc stuff (RTL)
+* Core Logic (RTL)
 
-There are three AXI-LITE slave interfaces exposed: one for the Front End control register, another AXI-LITE slave interface for the spy buffers, and finally one AXI-LITE interface for configuring the timing endpoint. Each of these interfaces will need to be connected to the AXI interconnects and assigned a base address. 
+These functional blocks tie together using AXI-LITE interconnect buses so that the processor side of the Zynq (PS) can access them.
 
 ## Front End Alignment
 
@@ -97,6 +104,31 @@ The timing endpoint firmware is largely unchanged since DAPHNEv2. The output clo
 		bit 4: endpoint timestamp ok
 		bits 3..0: endpoint state machine status "good to go!"
 
+## SPI Master for DACs (spi/spim_dac.vhd)
+
+There are three serial DAC chips daisy chained on a single SPI interface. This block has a single AXI-LITE interface. There is no readback capability on these DACs, they are write only, and all three DAC chips must be written at once. The DAC chips are AD5327BRUZ-REEL7.
+
+## SPI Master for AFEs and associated DACs (spi/spim_afe.vhd)
+
+There are five AFE chips on the board and each AFE has four serial DAC chips (2 offset, 2 trim). AFE0 (and 4 DAC chips) is on it's own SPI interface. AFE1 and AFE2 share an SPI interface, as does AFE2 and AFE3. There is a total of 3 SPI masters in this module. This block has a single AXI-LITE interface with several registers through which all 5 AFEs and all 20 DAC chips can be programmed. AFE registers can be read back but the DAC chips are write only. Also, DAC chips are daisy chained in pairs and must be written together. The AFE chips are AFE5808AZCF and the DAC chips are AD5327BRUZ-REEL7.
+
+## SPI Master for Current Monitor (spi/spim_cm.vhd)
+
+The Current Monitor is ADS1261IRHBT and is on a dedicated SPI interface.
+
+## I2C Master (i2c/i2cm.vhd)
+
+The I2C master communicates with lots of devices all over the board. This block is Xilinx IP and has a single AXI-LITE interface.
+
+## Misc Stuff (stuff.vhd)
+
+This module is a "catch all" place where various minor functions are grouped together and accessed through a single AXI-LITE interface. This includes:
+
+* fan PWM speed control and monitoring
+* vbias enable signal
+* analog mux enables and select lines
+* user LEDs
+
 ## Core Logic
 
 Core logic details TBD...
@@ -104,6 +136,7 @@ Core logic details TBD...
 This sub-module contains the self-triggered sender and the streaming mode sender. This is the "physics" code in the design and will be changing frequently. The core logic operates in a single clock domain using the 62.5MHz master clock. 
 
 Sorting and merging functions are now handled by the core backend logic which includes the MGT high speed 10Gbps serializers. This backend logic is based on the WIB design and is maintained by UK Bristol firmware developers in a separate repository.
+
 
 ## Misc Firmware Build Details
 
