@@ -36,7 +36,7 @@ end febit3;
 
 architecture febit3_arch of febit3 is
 
-    signal clk125_b: std_logic;
+    signal clk500_b: std_logic;
     signal din_ibuf, din_delayed : std_logic;
     signal q, q_reg, q2_reg: std_logic_vector(7 downto 0);
     signal dout_reg: std_logic_vector(15 downto 0);
@@ -92,7 +92,7 @@ port map(
     RST => '0'                  -- 1-bit input: Asynchronous Reset to the DELAY_VALUE
 );
 
-clk125_b <= not clk125; -- LOCAL inversion on fast clock! Important! Don't use a separate BUFG net for this!                   
+clk500_b <= not clk500; -- LOCAL inversion on fast clock! Important! Don't use a separate BUFG net for this!                   
 
 ISERDESE3_inst : ISERDESE3
 generic map(
@@ -109,8 +109,8 @@ port map(
     INTERNAL_DIVCLK => open, -- 1-bit output: Internally divided down clock used when FIFO is disabled (do not connect)   
     Q => Q,                  -- 8-bit registered output   
     CLK => clk500,           -- 1-bit input: High-speed clock   
+    CLK_B => clk500_b,       -- 1-bit input: Inversion of High-speed clock CLK   
     CLKDIV => clk125,        -- 1-bit input: Divided Clock   
-    CLK_B => clk125_b,       -- 1-bit input: Inversion of High-speed clock CLK   
     D => din_delayed,        -- 1-bit input: Serial Data Input   
     FIFO_RD_CLK => '0',      -- 1-bit input: FIFO read clock   
     FIFO_RD_EN => '0',       -- 1-bit input: Enables reading the FIFO when asserted   
