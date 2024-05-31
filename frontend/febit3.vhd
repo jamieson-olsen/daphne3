@@ -6,9 +6,14 @@
 -- this is a TOTAL REDESIGN around the UltraScale/Ultrascale+ ISERDESE3 which does away with 
 -- the BITSLIP feature. The bitslip functionality is now done in the FPGA fabric.
 --
--- The three clocks must be frequency locked and have the rising edges aligned. 
+-- The three clocks must be frequency locked and have the rising edges aligned.
 --
--- idelay_en_vtc must be low when loading idelay_cntvaluein.
+-- Xilinx recommends having a single MMCM output (500MHz) drive a BUFG to make clk500
+-- and use that same MMCM ouput to drive a BUFGCE_DIV (BUFGCE_DIVIDE=4) to make the 125MHz clock.
+-- Apparently this is better than using another MMCM output to make the 125MHz clock.
+-- I think that's kludgy but whatever...
+--
+-- NOTE idelay_en_vtc must be LOW when loading IDELAY tap values.
 --
 -- Jamieson Olsen <jamieson@fnal.gov>
 
@@ -25,9 +30,9 @@ port(
     clock: in std_logic;   -- word/master clock 62.5MHz
     clk500: in std_logic;  -- fast bit clock 500MHz
     clk125: in std_logic;  -- byte clock 125MHz
-    idelay_load: in std_logic;  -- load the IDELAY value (clkdiv)
-    idelay_cntvaluein: in std_logic_vector(8 downto 0); -- IDELAY tap value (clkdiv)
-    idelay_en_vtc: in std_logic;  -- IDELAY temperature/voltage compensation (async)
+    idelay_load: in std_logic;  -- load the IDELAY value (clk125)
+    idelay_cntvaluein: in std_logic_vector(8 downto 0); -- IDELAY tap value (clk125)
+    idelay_en_vtc: in std_logic;  -- IDELAY temperature/voltage comp (async)
     iserdes_reset: in std_logic;  -- reset for ISERDES (async)
     iserdes_bitslip: in std_logic_vector(3 downto 0); -- word alignment value (clock)
     dout: out std_logic_vector(15 downto 0)
@@ -36,7 +41,7 @@ end febit3;
 
 architecture febit3_arch of febit3 is
 
-    signal clk500_b: std_logic;
+    -- signal clk500_b: std_logic;
     signal din_ibuf, din_delayed : std_logic;
     signal q, q_reg, q2_reg: std_logic_vector(7 downto 0);
     signal dout_reg: std_logic_vector(15 downto 0);
@@ -58,9 +63,10 @@ begin
     );
 
 -- adjustable delay 512 taps and the loading of the delay value is 
--- done synchronously with the clkdiv clock when load=1 as described in UG471 
+-- done synchronously with the clkdiv clock when load=1 as described in UG571 
 
--- IDELAYCTRL needs a refclk in the range of 300MHz to 800MHz
+-- IDELAYCTRL needs a refclk in the range of 300MHz to 800MHz, we use 500MHz because we have it available
+-- One IDELAYCTRL module (located one level up) covers all IDELAYE3's used in this design.
 
 IDELAYE3_inst : IDELAYE3
 generic map(
@@ -92,14 +98,14 @@ port map(
     RST => '0'                  -- 1-bit input: Asynchronous Reset to the DELAY_VALUE
 );
 
-clk500_b <= not clk500; -- LOCAL inversion on fast clock! Important! Don't use a separate BUFG net for this!                   
+-- NOTE: CLK and CLK_B can use the same clock (clk500) if IS_CLK_INVERTED=0 and IS_CLK_B_INVERTED=1
 
 ISERDESE3_inst : ISERDESE3
 generic map(
     DATA_WIDTH => 8,                 -- Parallel data width (4,8)
     FIFO_ENABLE => "FALSE",          -- Enables the use of the FIFO   
     FIFO_SYNC_MODE => "FALSE",       -- Always set to FALSE. TRUE is reserved for later use.   
-    IS_CLK_B_INVERTED => '0',        -- Optional inversion for CLK_B   
+    IS_CLK_B_INVERTED => '1',        -- Optional inversion for CLK_B
     IS_CLK_INVERTED => '0',          -- Optional inversion for CLK   
     IS_RST_INVERTED => '0',          -- Optional inversion for RST   
     SIM_DEVICE => "ULTRASCALE_PLUS"  -- Set the device version for simulation functionality (ULTRASCALE, ULTRASCALE_PLUS, ULTRASCALE_PLUS_ES1, ULTRASCALE_PLUS_ES2)
@@ -109,11 +115,11 @@ port map(
     INTERNAL_DIVCLK => open, -- 1-bit output: Internally divided down clock used when FIFO is disabled (do not connect)   
     Q => Q,                  -- 8-bit registered output   
     CLK => clk500,           -- 1-bit input: High-speed clock   
-    CLK_B => clk500_b,       -- 1-bit input: Inversion of High-speed clock CLK   
-    CLKDIV => clk125,        -- 1-bit input: Divided Clock   
+    CLK_B => clk500,         -- 1-bit input: Inversion of High-speed clock CLK, assumes IS_CLK_B_INVERTED=1
+    CLKDIV => clk125,        -- 1-bit input: Divided Clock
     D => din_delayed,        -- 1-bit input: Serial Data Input   
-    FIFO_RD_CLK => '0',      -- 1-bit input: FIFO read clock   
-    FIFO_RD_EN => '0',       -- 1-bit input: Enables reading the FIFO when asserted   
+    FIFO_RD_CLK => clk125,   -- 1-bit input: FIFO read clock 
+    FIFO_RD_EN => '1',       -- 1-bit input: Enables reading the FIFO when asserted
     RST => iserdes_reset     -- 1-bit input: Asynchronous Reset
 );
 
