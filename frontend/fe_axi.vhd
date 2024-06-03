@@ -294,11 +294,13 @@ begin
                 iserdes_bitslip_reg(2) <= iserdes_bitslip_reg(2);
                 iserdes_bitslip_reg(3) <= iserdes_bitslip_reg(3);
                 iserdes_bitslip_reg(4) <= iserdes_bitslip_reg(4);
-                trig1_reg <= trig0_reg; -- momentary + self clearing
-                trig0_reg <= '0'; 
-                idelay_load1_reg <= idelay_load0_reg; -- momentary + self clearing
-                idelay_load0_reg <= "00000";
 	        end case;
+
+          else -- momentary, self clearing outputs
+            trig1_reg <= trig0_reg;
+            trig0_reg <= '0'; 
+            idelay_load1_reg <= idelay_load0_reg;
+            idelay_load0_reg <= "00000";
 	      end if;
 	    end if;
 	  end if;                   
