@@ -19,16 +19,16 @@ port(
   );
 end AFE5808;
 
-architecture AFE5808_arch of AFE5808 is
+architecture AFE5808_arch of AFE5808 is -- these are 16 bit patterns
 
-    signal d0_vec: std_logic_vector(15 downto 0) := "1000000000000100"; -- 0x2001
-    signal d1_vec: std_logic_vector(15 downto 0) := "1100000000001100"; -- 0x3003
-    signal d2_vec: std_logic_vector(15 downto 0) := "1010101010101000"; -- 0x1555
-    signal d3_vec: std_logic_vector(15 downto 0) := "0101010101010100"; -- 0x2AAA
-    signal d4_vec: std_logic_vector(15 downto 0) := "1111111111111100"; -- 0x3FFF
+    signal d0_vec: std_logic_vector(15 downto 0) := "1000000000000001"; -- 0x8001
+    signal d1_vec: std_logic_vector(15 downto 0) := "1111000000000011"; -- 0xF003
+    signal d2_vec: std_logic_vector(15 downto 0) := "0101010101010101"; -- 0x5555
+    signal d3_vec: std_logic_vector(15 downto 0) := "1010101010101010"; -- 0xAAAA
+    signal d4_vec: std_logic_vector(15 downto 0) := "1111111111111111"; -- 0xFFFF
     signal d5_vec: std_logic_vector(15 downto 0) := "0000000000000000"; -- 0x0000 
-    signal d6_vec: std_logic_vector(15 downto 0) := "0010101011110000"; -- 0x0ABC
-    signal d7_vec: std_logic_vector(15 downto 0) := "0000000000000000"; -- count up
+    signal d6_vec: std_logic_vector(15 downto 0) := "1010101111001101"; -- 0xABCD
+    signal d7_vec: std_logic_vector(15 downto 0) := "0000000000000000"; -- ADC count up mode
     signal d8_vec: std_logic_vector(15 downto 0) := "1111111100000000"; -- aka FCLK 
 
     constant bit_time: time := 1.000ns;  -- 16.000ns / 16

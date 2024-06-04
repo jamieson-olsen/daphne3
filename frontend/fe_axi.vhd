@@ -103,10 +103,10 @@ architecture fe_axi_arch of fe_axi is
 	signal aw_en: std_logic;
 
 	signal idelay_tap_reg: array_5x9_type;
-    signal idelay_load0_reg, idelay_load1_reg: std_logic_vector(4 downto 0) := "00000";
+    signal idelay_load0_reg, idelay_load1_reg, idelay_load2_reg: std_logic_vector(4 downto 0) := "00000";
     signal iserdes_bitslip_reg: array_5x4_type;
     signal control_reg: std_logic_vector(31 downto 0) := (others=>'0');
-    signal trig0_reg, trig1_reg: std_logic := '0';
+    signal trig_reg: std_logic_vector(5 downto 0) := "000000";
 
     -- register offsets are relative to the base address specified for this AXI-LITE slave instance
 
@@ -219,7 +219,7 @@ begin
 	process (S_AXI_ACLK)
 	begin
 	  if rising_edge(S_AXI_ACLK) then 
-	    if S_AXI_ARESETN = '0' then
+	    if (S_AXI_ARESETN = '0') then
           idelay_tap_reg(0) <= (others=>'0');
           idelay_tap_reg(1) <= (others=>'0');
           idelay_tap_reg(2) <= (others=>'0');
@@ -227,12 +227,14 @@ begin
           idelay_tap_reg(4) <= (others=>'0');
           idelay_load0_reg <= "00000";
           idelay_load1_reg <= "00000";
+          idelay_load2_reg <= "00000";
           iserdes_bitslip_reg(0) <= (others=>'0');
           iserdes_bitslip_reg(1) <= (others=>'0');
           iserdes_bitslip_reg(2) <= (others=>'0');
           iserdes_bitslip_reg(3) <= (others=>'0');
           iserdes_bitslip_reg(4) <= (others=>'0');
           control_reg <= (others=>'0');
+          trig_reg <= "000000";
 	    else
 	      if (reg_wren = '1' and S_AXI_WSTRB = "1111") then
 
@@ -245,7 +247,7 @@ begin
                 control_reg <= S_AXI_WDATA;
 
 	          when TRIG_OFFSET => 
-                trig0_reg <= '1';
+                trig_reg(0) <= '1';
 
 	          when TAP0_OFFSET => 
                 idelay_tap_reg(0) <= S_AXI_WDATA(8 downto 0);
@@ -296,11 +298,28 @@ begin
                 iserdes_bitslip_reg(4) <= iserdes_bitslip_reg(4);
 	        end case;
 
-          else -- momentary, self clearing outputs
-            trig1_reg <= trig0_reg;
-            trig0_reg <= '0'; 
+          else 
+
+            -- handle the momentary, self clearing outputs
+            -- trigger pulse originates in AXICLK domain (100MHz) and crosses into master clock domain (62.5MHz)
+            -- make this pulse FOUR AXICLKs wide just to be safe, and make it come from a single register 
+            -- (not a combi function of multiple registers) to be clean...
+
+            trig_reg(0) <= '0';
+            trig_reg(1) <= trig_reg(0);
+            trig_reg(2) <= trig_reg(1);
+            trig_reg(3) <= trig_reg(2);
+            trig_reg(4) <= trig_reg(3);
+            trig_reg(5) <= trig_reg(4) or trig_reg(3) or trig_reg(2) or trig_reg(1) or trig_reg(0);
+
+            -- idelay load pulse comes from AXICLK 100MHz and crosses into clk125 domain
+            -- OK to make this two AXICLKs wide, and again, make this signal from a single register (idelay_load2_reg)
+            -- and NOT a combi function of multiple registers to be cleaner.
+
+            idelay_load2_reg <= idelay_load1_reg or idelay_load0_reg;
             idelay_load1_reg <= idelay_load0_reg;
             idelay_load0_reg <= "00000";
+
 	      end if;
 	    end if;
 	  end if;                   
@@ -424,8 +443,6 @@ begin
 	  end if;
 	end process;
 
-    trig <= trig1_reg or trig0_reg; -- momentary pulse, only 2 AXI clks wide
-
     idelay_en_vtc <= control_reg(2);
     iserdes_reset <= control_reg(1);
     idelayctrl_reset <= control_reg(0);
@@ -436,7 +453,14 @@ begin
     idelay_tap(3) <= idelay_tap_reg(3);
     idelay_tap(4) <= idelay_tap_reg(4);
 
-    idelay_load <= idelay_load1_reg or idelay_load0_reg; -- momentary pulse, only 2 AXI clks wide
+    -- the following outputs are pulse stretched to 3 AXI clocks wide and are momentary
+    -- and come from a SINGLE register, as they will need to cross a clock domain and 
+    -- we want to minimize chances of glitching. Xilinx UG571 says that IDELAY tap values
+    -- should be stable one clk cycle before LOAD is asserted. using an extra register stage 
+    -- (idelay_load2_reg) guarantees this is the case.
+
+    trig <= trig_reg(5);
+    idelay_load <= idelay_load2_reg; 
 
     iserdes_bitslip(0) <= iserdes_bitslip_reg(0);
     iserdes_bitslip(1) <= iserdes_bitslip_reg(1);

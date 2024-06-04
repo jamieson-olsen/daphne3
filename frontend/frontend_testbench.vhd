@@ -219,13 +219,60 @@ axipoke(addr => X"00000000", data => X"00000002"); -- release idelayctrl reset, 
 wait for 500ns;
 axipoke(addr => X"00000000", data => X"00000000"); -- release iserdes reset
 wait for 500ns;
-axipoke(addr => X"0000000C", data => X"00000034"); -- load afe0 idelay value
+axipoke(addr => X"00000008", data => X"DEADBEEF"); -- make a trigger pulse
+
+-- now sweep the idelay values for AFE0 and look for the bit edges by observing front end dout bus
+
+for i in 0 to 511 loop
+    wait for 200ns;
+    axipoke(addr => X"0000000C", data => std_logic_vector(to_unsigned(i,32)) );
+end loop;
+
+-- ok we determined that the "sweet spot" (middle of the bit) for AFE0 idelay is 0x80
+-- ok to assume all other AFEs are the same in this simulation
+-- update all AFEs (make them all just a little different to check device mapping)
+
 wait for 500ns;
-axipoke(addr => X"00000000", data => X"00000004"); -- set the EN_VTC bit
+axipoke(addr => X"0000000C", data => X"00000080"); 
+wait for 200ns;
+axipoke(addr => X"00000010", data => X"00000081"); 
+wait for 200ns;
+axipoke(addr => X"00000014", data => X"00000082"); 
+wait for 200ns;
+axipoke(addr => X"00000018", data => X"00000083"); 
+wait for 200ns;
+axipoke(addr => X"0000001C", data => X"00000084"); 
+
+-- done adjusting idelay values, now set the EN_VTC bit
+
 wait for 500ns;
-axipoke(addr => X"00000008", data => X"DEADBEEF"); -- trigger pulse
+axipoke(addr => X"00000000", data => X"00000004"); 
+
+-- now we need to sweep bitslip values for afe0...
+
+for i in 0 to 8 loop
+    wait for 200ns;
+    axipoke(addr => X"00000020", data => std_logic_vector(to_unsigned(i,32)) );
+end loop;
+
+-- ok we determined that BITSLIP=8 is the correct bitslip value for AFE0
+-- because that makes afe0 dout8 (frame marker) the correct value of 0xFF00
+-- ok to apply this bitslip value to all other AFEs in this simulation...
+
+wait for 200ns;
+axipoke(addr => X"00000020", data => X"00000008");
+wait for 200ns;
+axipoke(addr => X"00000024", data => X"00000008");
+wait for 200ns;
+axipoke(addr => X"00000028", data => X"00000008");
+wait for 200ns;
+axipoke(addr => X"0000002C", data => X"00000008");
+wait for 200ns;
+axipoke(addr => X"00000030", data => X"00000008");
+
+-- done with front end alignment
+
 wait;
 end process aximaster_proc;
-
 
 end frontend_testbench_arch;
