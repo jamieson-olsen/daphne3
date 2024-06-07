@@ -16,8 +16,8 @@ entity spim_dac is
 port(
     dac_sclk: out std_logic;
     dac_din: out std_logic;
-    dac_syncn: out std_logic;
-    dac_ldacn: out std_logic;
+    dac_sync_n: out std_logic;
+    dac_ldac_n: out std_logic;
   
     -- AXI-LITE interface
 

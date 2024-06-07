@@ -11,10 +11,12 @@ use std.textio;
 
 entity AFE5808A is
 port(
+    rst: in std_logic;
+    pdn: in std_logic;
     sclk: in std_logic; -- 20MHz max
     sdata: in std_logic;
     sen: in std_logic;
-    sdout: out std_logic
+    sdout: out std_logic -- Z when SEN is high
 );
 end AFE5808A;
 

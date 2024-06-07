@@ -60,10 +60,10 @@ port(
 
     -- SPI master (for 3 DACs)
 
-    dac_sclk:  out std_logic;
-    dac_din:   out std_logic;
-    dac_syncn: out std_logic;
-    dac_ldacn: out std_logic;
+    dac_sclk:   out std_logic;
+    dac_din:    out std_logic;
+    dac_sync_n: out std_logic;
+    dac_ldac_n: out std_logic;
 
     -- SPI master (for AFEs and associated DACs)
 
@@ -263,8 +263,8 @@ component spim_dac
 port(
     dac_sclk        : out std_logic;
     dac_din         : out std_logic;
-    dac_syncn       : out std_logic;
-    dac_ldacn       : out std_logic;
+    dac_sync_n      : out std_logic;
+    dac_ldac_n      : out std_logic;
 	S_AXI_ACLK	    : in std_logic;
 	S_AXI_ARESETN	: in std_logic;
 	S_AXI_AWADDR	: in std_logic_vector(31 downto 0);
@@ -789,8 +789,8 @@ spim_dac_inst: spim_dac
 port map(
     dac_sclk        => dac_sclk,
     dac_din         => dac_din,
-    dac_syncn       => dac_syncn,
-    dac_ldacn       => dac_ldacn, 
+    dac_sync_n      => dac_sync_n,
+    dac_ldac_n      => dac_ldac_n, 
     S_AXI_ACLK	    => S_AXI_ACLK,
 	S_AXI_ARESETN	=> S_AXI_ARESETN,
 	S_AXI_AWADDR	=> DAC_AXI_AWADDR,

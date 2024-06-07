@@ -47,28 +47,38 @@ port(
     afe0_sclk: out std_logic;
     afe0_sdata: out std_logic;
     afe0_sen: out std_logic;
-    afe0_csn_trim: out std_logic;
-    afe0_csn_off: out std_logic;
-    afe0_ldacn_trim: out std_logic;
-    afe0_ldacn_off: out std_logic;
+    afe0_trim_csn: out std_logic;
+    afe0_trim_ldacn: out std_logic;
+    afe0_offset_csn: out std_logic;
+    afe0_offset_ldacn: out std_logic;
 
     afe12_miso: in std_logic;
     afe12_sclk: out std_logic;
     afe12_sdata: out std_logic;
-    afe12_sen: out std_logic_vector(1 downto 0);
-    afe12_csn_trim: out std_logic_vector(1 downto 0);
-    afe12_csn_off: out std_logic_vector(1 downto 0);
-    afe12_ldacn_trim: out std_logic_vector(1 downto 0);
-    afe12_ldacn_off: out std_logic_vector(1 downto 0);
+    afe1_sen: out std_logic;
+    afe2_sen: out std_logic;
+    afe1_trim_csn: out std_logic;
+    afe1_trim_ldacn: out std_logic;
+    afe1_offset_csn: out std_logic;
+    afe1_offset_ldacn: out std_logic;
+    afe2_trim_csn: out std_logic;
+    afe2_trim_ldacn: out std_logic;
+    afe2_offset_csn: out std_logic;
+    afe2_offset_ldacn: out std_logic;
 
     afe34_miso: in std_logic;
     afe34_sclk: out std_logic;
     afe34_sdata: out std_logic;
-    afe34_sen: out std_logic_vector(1 downto 0);
-    afe34_csn_trim: out std_logic_vector(1 downto 0);
-    afe34_csn_off: out std_logic_vector(1 downto 0);
-    afe34_ldacn_trim: out std_logic_vector(1 downto 0);
-    afe34_ldacn_off: out std_logic_vector(1 downto 0);
+    afe3_sen: out std_logic;
+    afe4_sen: out std_logic;
+    afe3_trim_csn: out std_logic;
+    afe3_trim_ldacn: out std_logic;
+    afe3_offset_csn: out std_logic;
+    afe3_offset_ldacn: out std_logic;
+    afe4_trim_csn: out std_logic;
+    afe4_trim_ldacn: out std_logic;
+    afe4_offset_csn: out std_logic;
+    afe4_offset_ldacn: out std_logic;
 
     -- AXI-LITE interface
 
