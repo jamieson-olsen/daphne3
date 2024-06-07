@@ -17,7 +17,8 @@ port(
     sclk: in std_logic; -- 10MHz max
     din:  in std_logic;
     cs_n: in std_logic;
-    dout: out std_logic
+    dout: out std_logic;
+    drdyn: out std_logic
 );
 end ADS1261;
 
@@ -43,5 +44,7 @@ begin
     -- report "AFE SPI access register " & to_hstring(addr) & " data = " & to_hstring(data_new);
 
 end process spi_transactor;
+
+drdyn <= '0';
 
 end ADS1261_arch;
