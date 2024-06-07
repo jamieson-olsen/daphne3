@@ -27,8 +27,6 @@ entity endpoint is
 port(
 
     sysclk_p, sysclk_n:   in std_logic;  -- 100MHz constant system clock from PS or oscillator
-    reset_async: in std_logic;  -- async hard reset from the PS
-    soft_reset:  out std_logic;  -- soft reset from user sync to axi clock
 
     -- external optical timing SFP link interface
 
@@ -119,16 +117,16 @@ port(
     mmcm1_locked: in std_logic;
     ep_reset: out std_logic;
     ep_addr: out std_logic_vector(15 downto 0);
-    soft_reset: out std_logic;
     mmcm1_reset: out std_logic;
     use_ep: out std_logic
 );
 end component;
 
+signal reset_async: std_logic := '0';
+
 signal sysclk_ibuf: std_logic;
 signal mmcm0_clkfbout, mmcm0_clkfbout_buf: std_logic;
 signal mmcm0_clkout0: std_logic;
--- signal mmcm0_clkout1: std_logic;
 signal mmcm0_clkout2: std_logic;
 signal local_clk62p5: std_logic;
 signal clk100_i: std_logic;
@@ -152,6 +150,8 @@ signal ep_addr: std_logic_vector(15 downto 0);
 signal real_timestamp, fake_timestamp, timestamp_reg: std_logic_vector(63 downto 0);
 
 begin
+
+reset_async <= not S_AXI_ARESETN;
 
 -- if using external LVDS 100MHz sysclk, receive it with IBUFDS.
 
@@ -406,7 +406,6 @@ port map(
 
     ep_reset => ep_reset,
     ep_addr => ep_addr,
-    soft_reset => soft_reset,
     mmcm1_reset => mmcm1_reset,
     use_ep => use_ep
 );

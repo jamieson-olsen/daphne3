@@ -67,4 +67,6 @@ architecture spim_dac_arch of spim_dac is
 
 begin
 
+-- placeholder....
+
 end spim_dac_arch;

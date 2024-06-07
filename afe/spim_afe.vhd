@@ -117,5 +117,6 @@ architecture spim_afe_arch of spim_afe is
 
 begin
 
+-- placeholder
 
 end spim_afe_arch;

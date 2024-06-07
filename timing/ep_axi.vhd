@@ -5,7 +5,7 @@
 --  bits 31..3: don't care
 --  bit 2: clock source (0=local, 1=use endpoint)
 --  bit 1: MMCM1 reset
---  bit 0: general "soft" reset from user
+--  bit 0: reserved
 
 -- base+4 = clock status register R/O
 --  bits 31..2: zero
@@ -58,7 +58,6 @@ entity ep_axi is
 
     ep_reset: out std_logic; -- soft reset endpoint logic
     ep_addr: out std_logic_vector(15 downto 0); -- endpoint address
-    soft_reset: out std_logic; -- general soft reset from user sync to axi clock
     mmcm1_reset: out std_logic;
     use_ep: out std_logic
 
@@ -327,6 +326,5 @@ begin
 
     use_ep      <= clock_ctrl_reg(2);
     mmcm1_reset <= clock_ctrl_reg(1);
-    soft_reset  <= clock_ctrl_reg(0);
 
 end ep_axi_arch;

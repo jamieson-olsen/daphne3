@@ -74,7 +74,6 @@ use work.daphne3_package.all;
 entity spybuffers is
 port(
     clock: in std_logic; -- master clock
-    reset: in std_logic; -- active high reset async
     trig:  in std_logic; -- trigger pulse sync to clock
     din:   in array_5x9x16_type; -- AFE data sync to clock
     timestamp: in std_logic_vector(63 downto 0); -- timestamp sync to clock
@@ -125,6 +124,7 @@ architecture spybuffers_arch of spybuffers is
     signal addra: std_logic_vector(10 downto 0);
     signal ram_dout: std_logic_vector(31 downto 0);
 
+    signal reset: std_logic;
     signal ena, wea: array_5x9_type;
     signal douta: array_5x9x32_type;
     signal ts_ena, ts_wea: std_logic_vector(3 downto 0);
@@ -146,6 +146,8 @@ architecture spybuffers_arch of spybuffers is
     end component;
 
 begin
+
+    reset <= not S_AXI_ARESETN;
 
     -- 45 spy buffers (5 AFEs x 9 channels/AFE)
     -- channels 0-7 are AFE data 

@@ -13,9 +13,6 @@
 -- base+16: analog mux enable lines (mux_en), 2 bits, R/W
 -- base+20: analog mux address lines (mux_a), 2 bits, R/W
 -- base+24: status LEDs, 6 bits, R/W
--- base+28: AFE global control (common to all AFEs) R/W
---          bit 1 = set to force all AFEs into HARD RESET, default is 0
---          bit 0 = set for force all AFEs to POWER DOWN, default is 0
 
 library ieee;
 use ieee.std_logic_1164.all;
@@ -29,8 +26,6 @@ port(
     mux_en: out std_logic_vector(1 downto 0); -- analog mux enables
     mux_a: out std_logic_vector(1 downto 0); -- analog mux selects
     stat_led: out std_logic_vector(5 downto 0); -- general purpose LEDs
-    afe_rst: out std_logic; -- high = hard reset all AFEs
-    afe_pdn: out std_logic; -- low = power down all AFEs
   
     -- AXI-LITE interface
 
@@ -94,7 +89,6 @@ architecture stuff_arch of stuff is
     signal stat_led_reg: std_logic_vector(5 downto 0) := "000000";
     signal hvbias_en_reg: std_logic := '0';
     signal mux_a_reg, mux_en_reg: std_logic_vector(1 downto 0) := "00";
-    signal afe_rst_reg, afe_pd_reg: std_logic;
 
     -- register offsets are relative to the base address specified for this AXI-LITE slave instance
 
@@ -105,7 +99,6 @@ architecture stuff_arch of stuff is
     constant MUXEN_OFFSET:   std_logic_vector(4 downto 0) := "10000";
     constant MUXA_OFFSET:    std_logic_vector(4 downto 0) := "10100";
     constant LED_OFFSET:     std_logic_vector(4 downto 0) := "11000";
-    constant AFECTRL_OFFSET: std_logic_vector(4 downto 0) := "11100";
 
 begin
 
@@ -255,8 +248,6 @@ begin
         mux_en_reg <= "00";
         mux_a_reg <= "00";
         stat_led_reg <= "000000";
-        afe_rst_reg <= '0';
-        afe_pd_reg <= '0';
     else
       if (reg_wren = '1' and S_AXI_WSTRB = "1111") then
 
@@ -279,10 +270,6 @@ begin
 
           when LED_OFFSET => 
             stat_led_reg <= S_AXI_WDATA(5 downto 0);
-
-          when AFECTRL_OFFSET => 
-            afe_rst_reg <= S_AXI_WDATA(1);
-            afe_pd_reg <= S_AXI_WDATA(0);
 
           when others =>
             null;
@@ -384,7 +371,6 @@ reg_data_out <= (X"000000" & fan_speed_reg)                    when (axi_araddr(
                 (X"0000000" & "00" & mux_en_reg)               when (axi_araddr(4 downto 0)=MUXEN_OFFSET) else
                 (X"0000000" & "00" & mux_a_reg)                when (axi_araddr(4 downto 0)=MUXA_OFFSET) else
                 (X"000000" & "00" & stat_led_reg)              when (axi_araddr(4 downto 0)=LED_OFFSET) else
-                (X"0000000" & "00" & afe_rst_reg & afe_pd_reg) when (axi_araddr(4 downto 0)=AFECTRL_OFFSET) else
                 X"00000000";
 
 -- Output register or memory read data
@@ -408,8 +394,6 @@ end process;
 -- assign registers to the outputs
 
 fan_ctrl <= not fan_ctrl_reg; -- compensate for inverter Q2 on the board
-afe_rst <= afe_rst_reg; -- afe global hard reset is active high
-afe_pdn <= not afe_pd_reg; -- afe global power down signal is active low
 mux_a <= mux_a_reg;
 mux_en <= mux_en_reg;
 hvbias_en <= hvbias_en_reg;
