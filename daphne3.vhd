@@ -72,40 +72,21 @@ port(
 
     afe0_miso: in std_logic;
     afe0_sclk: out std_logic;
-    afe0_sdata: out std_logic;
-    afe0_sen: out std_logic;
-    afe0_trim_csn: out std_logic;
-    afe0_trim_ldacn: out std_logic;
-    afe0_offset_csn: out std_logic;
-    afe0_offset_ldacn: out std_logic;
+    afe0_mosi: out std_logic;
 
     afe12_miso: in std_logic;
     afe12_sclk: out std_logic;
-    afe12_sdata: out std_logic;
-    afe1_sen: out std_logic;
-    afe2_sen: out std_logic;
-    afe1_trim_csn: out std_logic;
-    afe1_trim_ldacn: out std_logic;
-    afe1_offset_csn: out std_logic;
-    afe1_offset_ldacn: out std_logic;
-    afe2_trim_csn: out std_logic;
-    afe2_trim_ldacn: out std_logic;
-    afe2_offset_csn: out std_logic;
-    afe2_offset_ldacn: out std_logic;
+    afe12_mosi: out std_logic;
 
     afe34_miso: in std_logic;
     afe34_sclk: out std_logic;
-    afe34_sdata: out std_logic;
-    afe3_sen: out std_logic;
-    afe4_sen: out std_logic;
-    afe3_trim_csn: out std_logic;
-    afe3_trim_ldacn: out std_logic;
-    afe3_offset_csn: out std_logic;
-    afe3_offset_ldacn: out std_logic;
-    afe4_trim_csn: out std_logic;
-    afe4_trim_ldacn: out std_logic;
-    afe4_offset_csn: out std_logic;
-    afe4_offset_ldacn: out std_logic
+    afe34_mosi: out std_logic;
+
+    afe_sen: out std_logic_vector(4 downto 0);
+    trim_sync_n: out std_logic_vector(4 downto 0);
+    trim_ldac_n: out std_logic_vector(4 downto 0);
+    offset_sync_n: out std_logic_vector(4 downto 0);
+    offset_ldac_n: out std_logic_vector(4 downto 0)
 
   );
 end DAPHNE3;
@@ -342,41 +323,21 @@ port(
 
     afe0_miso: in std_logic;
     afe0_sclk: out std_logic;
-    afe0_sdata: out std_logic;
-    afe0_sen: out std_logic;
-    afe0_trim_csn: out std_logic;
-    afe0_trim_ldacn: out std_logic;
-    afe0_offset_csn: out std_logic;
-    afe0_offset_ldacn: out std_logic;
+    afe0_mosi: out std_logic;
 
     afe12_miso: in std_logic;
     afe12_sclk: out std_logic;
-    afe12_sdata: out std_logic;
-    afe1_sen: out std_logic;
-    afe2_sen: out std_logic;
-    afe1_trim_csn: out std_logic;
-    afe1_trim_ldacn: out std_logic;
-    afe1_offset_csn: out std_logic;
-    afe1_offset_ldacn: out std_logic;
-    afe2_trim_csn: out std_logic;
-    afe2_trim_ldacn: out std_logic;
-    afe2_offset_csn: out std_logic;
-    afe2_offset_ldacn: out std_logic;
+    afe12_mosi: out std_logic;
 
     afe34_miso: in std_logic;
     afe34_sclk: out std_logic;
-    afe34_sdata: out std_logic;
-    afe3_sen: out std_logic;
-    afe4_sen: out std_logic;
-    afe3_trim_csn: out std_logic;
-    afe3_trim_ldacn: out std_logic;
-    afe3_offset_csn: out std_logic;
-    afe3_offset_ldacn: out std_logic;
-    afe4_trim_csn: out std_logic;
-    afe4_trim_ldacn: out std_logic;
-    afe4_offset_csn: out std_logic;
-    afe4_offset_ldacn: out std_logic;
+    afe34_mosi: out std_logic;
 
+    afe_sen: out std_logic_vector(4 downto 0);
+    trim_sync_n: out std_logic_vector(4 downto 0);
+    trim_ldac_n: out std_logic_vector(4 downto 0);
+    offset_sync_n: out std_logic_vector(4 downto 0);
+    offset_ldac_n: out std_logic_vector(4 downto 0);
 	S_AXI_ACLK	    : in std_logic;
 	S_AXI_ARESETN	: in std_logic;
 	S_AXI_AWADDR	: in std_logic_vector(31 downto 0);
@@ -730,45 +691,22 @@ port map(
 
 spim_afe_inst: spim_afe 
 port map(
-    afe_rst           => afe_rst,
-    afe_pdn           => afe_pdn,
-
-    afe0_sclk         => afe0_sclk,
-    afe0_sdata        => afe0_sdata,
-    afe0_sen          => afe0_sen,
-    afe0_miso         => afe0_miso,
-    afe0_trim_csn     => afe0_trim_csn,
-    afe0_trim_ldacn   => afe0_trim_ldacn,
-    afe0_offset_csn   => afe0_offset_csn,
-    afe0_offset_ldacn => afe0_offset_ldacn,
-
-    afe12_sclk         => afe12_sclk,
-    afe12_sdata        => afe12_sdata,
-    afe1_sen           => afe1_sen,
-    afe2_sen           => afe2_sen,
-    afe12_miso         => afe12_miso,
-    afe1_trim_csn      => afe1_trim_csn,
-    afe1_trim_ldacn    => afe1_trim_ldacn,
-    afe1_offset_csn    => afe1_offset_csn,
-    afe1_offset_ldacn  => afe1_offset_ldacn,
-    afe2_trim_csn      => afe2_trim_csn,
-    afe2_trim_ldacn    => afe2_trim_ldacn,
-    afe2_offset_csn    => afe2_offset_csn,
-    afe2_offset_ldacn  => afe2_offset_ldacn,
-
-    afe34_sclk         => afe34_sclk,
-    afe34_sdata        => afe34_sdata,
-    afe3_sen           => afe3_sen,
-    afe4_sen           => afe4_sen,
-    afe34_miso         => afe34_miso,
-    afe3_trim_csn      => afe3_trim_csn,
-    afe3_trim_ldacn    => afe3_trim_ldacn,
-    afe3_offset_csn    => afe3_offset_csn,
-    afe3_offset_ldacn  => afe3_offset_ldacn,
-    afe4_trim_csn      => afe4_trim_csn,
-    afe4_trim_ldacn    => afe4_trim_ldacn,
-    afe4_offset_csn    => afe4_offset_csn,
-    afe4_offset_ldacn  => afe4_offset_ldacn,
+    afe_rst       => afe_rst,
+    afe_pdn       => afe_pdn,
+    afe0_miso     => afe0_miso,
+    afe0_sclk     => afe0_sclk,
+    afe0_mosi     => afe0_mosi,
+    afe12_miso    => afe12_miso,
+    afe12_sclk    => afe12_sclk,
+    afe12_mosi    => afe12_mosi,
+    afe34_miso    => afe34_miso,
+    afe34_sclk    => afe34_sclk,
+    afe34_mosi    => afe34_mosi,
+    afe_sen       => afe_sen,
+    trim_sync_n   => trim_sync_n,
+    trim_ldac_n   => trim_ldac_n,
+    offset_sync_n => offset_sync_n,
+    offset_ldac_n => offset_ldac_n,
 
     S_AXI_ACLK	     => S_AXI_ACLK,
 	S_AXI_ARESETN	 => S_AXI_ARESETN,

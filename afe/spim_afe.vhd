@@ -9,29 +9,38 @@
 -- 
 -- AFE = AFE5808AZCF and DAC = AD5327BRUZ-REEL7
 --
--- AFEs can be optionally be read back, but the DAC chips are write only. 
--- DAC chips are daisy chained in pairs and must be written together.
+-- AFEs are 24 bit transfers and support readback.
+-- DACs are daisy chained in pairs, 16 bits each, 32 bits total, no read back, both must be written together.
 --
--- base+0:  afe0 data to write
--- base+4:  afe0 read data 
--- base+8:  afe0 trim DAC data to write
--- base+12: afe0 offset DAC data to write
--- base+16: afe1 data to write
--- base+20: afe1 read data 
--- base+24: afe1 trim DAC data to write
--- base+28: afe1 offset DAC data to write
--- base+32: afe2 data to write
--- base+36: afe2 read data 
--- base+40: afe2 trim DAC data to write
--- base+44: afe2 offset DAC data to write
--- base+48: afe3 data to write
--- base+52: afe3 read data 
--- base+56: afe3 trim DAC data to write
--- base+60: afe3 offset DAC data to write
--- base+64: afe4 data to write
--- base+68: afe4 read data 
--- base+72: afe4 trim DAC data to write
--- base+76: afe4 offset DAC data to write
+-- base+0:  afe global control status register
+--          bit 4 = AFE34 interface busy R/O
+--          bit 3 = AFE12 interface busy R/O
+--          bit 2 = AFE0 interface busy R/O
+--          bit 1 = AFE power down R/W
+--          bit 0 = AFE hard reset R/W
+-- base+4:  afe0 data, 24 bits, R/W
+-- base+8:  afe0 trim DAC data, 32 bits, W/O
+-- base+12: afe0 offset DAC data, 32 bits, W/O
+-- base+16: afe1 data 24 bits, R/W
+-- base+20: afe1 trim DAC data, 32 bits, W/O
+-- base+24: afe1 offset DAC data, 32 bits, W/O
+-- base+28: afe2 data 24 bits, R/W
+-- base+32: afe2 trim DAC data, 32 bits, W/O
+-- base+36: afe2 offset DAC data, 32 bits, W/O
+-- base+40: afe3 data 24 bits, R/W 
+-- base+44: afe3 trim DAC data, 32 bits, W/O
+-- base+48: afe3 offset DAC data, 32 bits, W/O
+-- base+52: afe4 data 24 bits, R/W
+-- base+56: afe4 trim DAC data, 32 bits, W/O
+-- base+60: afe4 offset DAC data, 32 bits, W/O
+--
+-- take a modular approach here: make a small module that talks to a single AFE
+-- make another module that talks to a pair of daisy chained DACs
+-- then combine them to make the three SPI interfaces
+--
+-- after the AXI master writes to one of the data registers, the corresponding module will be BUSY
+-- for SOME TIME while it is shifting that data through the SPI interface. It is the responsibility of the 
+-- user to FIRST CHECK that these modules are NOT BUSY before attempting to write stuff!
 
 library ieee;
 use ieee.std_logic_1164.all;
@@ -45,40 +54,21 @@ port(
 
     afe0_miso: in std_logic;
     afe0_sclk: out std_logic;
-    afe0_sdata: out std_logic;
-    afe0_sen: out std_logic;
-    afe0_trim_csn: out std_logic;
-    afe0_trim_ldacn: out std_logic;
-    afe0_offset_csn: out std_logic;
-    afe0_offset_ldacn: out std_logic;
+    afe0_mosi: out std_logic;
 
     afe12_miso: in std_logic;
     afe12_sclk: out std_logic;
-    afe12_sdata: out std_logic;
-    afe1_sen: out std_logic;
-    afe2_sen: out std_logic;
-    afe1_trim_csn: out std_logic;
-    afe1_trim_ldacn: out std_logic;
-    afe1_offset_csn: out std_logic;
-    afe1_offset_ldacn: out std_logic;
-    afe2_trim_csn: out std_logic;
-    afe2_trim_ldacn: out std_logic;
-    afe2_offset_csn: out std_logic;
-    afe2_offset_ldacn: out std_logic;
+    afe12_mosi: out std_logic;
 
     afe34_miso: in std_logic;
     afe34_sclk: out std_logic;
-    afe34_sdata: out std_logic;
-    afe3_sen: out std_logic;
-    afe4_sen: out std_logic;
-    afe3_trim_csn: out std_logic;
-    afe3_trim_ldacn: out std_logic;
-    afe3_offset_csn: out std_logic;
-    afe3_offset_ldacn: out std_logic;
-    afe4_trim_csn: out std_logic;
-    afe4_trim_ldacn: out std_logic;
-    afe4_offset_csn: out std_logic;
-    afe4_offset_ldacn: out std_logic;
+    afe34_mosi: out std_logic;
+
+    afe_sen: out std_logic_vector(4 downto 0);
+    trim_sync_n: out std_logic_vector(4 downto 0);
+    trim_ldac_n: out std_logic_vector(4 downto 0);
+    offset_sync_n: out std_logic_vector(4 downto 0);
+    offset_ldac_n: out std_logic_vector(4 downto 0);
 
     -- AXI-LITE interface
 
@@ -108,25 +98,102 @@ end spim_afe;
 
 architecture spim_afe_arch of spim_afe is
 
-	signal axi_awaddr: std_logic_vector(31 downto 0);
-	signal axi_awready: std_logic;
-	signal axi_wready: std_logic;
-	signal axi_bresp: std_logic_vector(1 downto 0);
-	signal axi_bvalid: std_logic;
-	signal axi_araddr: std_logic_vector(31 downto 0);
-	signal axi_arready: std_logic;
-	signal axi_rdata: std_logic_vector(31 downto 0);
-	signal axi_rresp: std_logic_vector(1 downto 0);
-	signal axi_rvalid: std_logic;
-    signal axi_arvalid: std_logic;       
+component spim_dac2 is
+generic( CLKDIV: integer := 8 );
+port(
+    clock: in std_logic;
+    reset: in std_logic;
+    din: in std_logic_vector(31 downto 0);
+    we: in std_logic;
+    busy: out std_logic;
 
-	signal rden, wren: std_logic;
-	signal aw_en: std_logic;
-    signal addra: std_logic_vector(10 downto 0);
-    signal ram_dout: std_logic_vector(31 downto 0);
+    sclk: out std_logic;
+    mosi: out std_logic;
+    ldac_n: out std_logic;
+    sync_n: out std_logic
+);
+end component;
+
+component spim_afe1
+generic( CLKDIV: integer := 8 );
+port(
+    clock: in std_logic;
+    reset: in std_logic;
+    din: in std_logic_vector(23 downto 0);
+    we: in std_logic;
+    dout: out std_logic_vector(23 downto 0);
+    busy: out std_logic;
+
+    sclk: out std_logic;
+    sen:  out std_logic;
+    mosi: out std_logic;
+    miso: in std_logic
+);
+end component;
+
+signal axi_awaddr: std_logic_vector(31 downto 0);
+signal axi_awready: std_logic;
+signal axi_wready: std_logic;
+signal axi_bresp: std_logic_vector(1 downto 0);
+signal axi_bvalid: std_logic;
+signal axi_araddr: std_logic_vector(31 downto 0);
+signal axi_arready: std_logic;
+signal axi_rdata: std_logic_vector(31 downto 0);
+signal axi_rresp: std_logic_vector(1 downto 0);
+signal axi_rvalid: std_logic;
+signal axi_arvalid: std_logic;       
+
+signal rden, wren: std_logic;
+signal aw_en: std_logic;
+
+signal reset: std_logic;
+signal afe_we, afe_sclk, afe_mosi, afe_miso, afe_busy: std_logic_vector(4 downto 0);
+signal trim_we, trim_sclk, trim_mosi, trim_busy: std_logic_vector(4 downto 0);
+signal offset_we, offset_sclk, offset_mosi, offset_busy: std_logic_vector(4 downto 0);
+type array_5x24_type is array(4 downto 0) of std_logic_vector(23 downto 0);
+signal afe_dout: array_5x24_type;
+signal afe0_busy, afe12_busy, afe34_busy: std_logic;
 
 begin
 
--- placeholder
+reset <= not S_AXI_ARESETN;
+
+GenSpim: for i in 4 downto 0 generate
+
+    afe_inst: spim_afe1 -- SPI master for AFE
+    generic map( CLKDIV => 8 )
+    port map( clock => S_AXI_ACLK, reset => reset, din => S_AXI_WDATA(23 downto 0), we => afe_we(i), dout => afe_dout(i), busy => afe_busy(i),
+              sclk => afe_sclk(i), sen => afe_sen(i), mosi => afe_mosi(i), miso => afe_miso(i) );
+    
+    afe_trim_inst: spim_dac2 -- SPI master for 2 trim DACs
+    generic map( CLKDIV => 8 )
+    port map( clock => S_AXI_ACLK, reset => reset, din => S_AXI_WDATA, we => trim_we(i), busy => trim_busy(i),
+              sclk => trim_sclk(i), mosi => trim_mosi(i), ldac_n => trim_ldac_n(i), sync_n => trim_sync_n(i) );
+    
+    afe_offset_inst: spim_dac2 -- SPI master for 2 offset DACs
+    generic map( CLKDIV => 8 )
+    port map( clock => S_AXI_ACLK, reset => reset, din => S_AXI_WDATA, we => offset_we(i), busy => offset_busy(i),
+              sclk => offset_sclk(i), mosi => offset_mosi(i), ldac_n => offset_ldac_n(i), sync_n => offset_sync_n(i) );
+
+end generate GenSpim;
+
+afe0_sclk <= afe_sclk(0) and trim_sclk(0) and offset_sclk(0);
+afe0_mosi <= afe_mosi(0) or  trim_mosi(0) or  offset_mosi(0);
+afe_miso(0) <= afe0_miso;
+afe0_busy <= afe_busy(0) or trim_busy(0) or offset_busy(0);
+
+afe12_sclk <= afe_sclk(1) and trim_sclk(1) and offset_sclk(1) and afe_sclk(2) and trim_sclk(2) and offset_sclk(2);
+afe12_mosi <= afe_mosi(1) or  trim_mosi(1) or  offset_mosi(1) or  afe_mosi(2) or  trim_mosi(2) or  offset_mosi(2);
+afe_miso(1) <= afe12_miso;
+afe_miso(2) <= afe12_miso;
+afe12_busy <= afe_busy(1) or trim_busy(1) or offset_busy(1) or afe_busy(2) or trim_busy(2) or offset_busy(2);
+
+afe34_sclk <= afe_sclk(3) and trim_sclk(3) and offset_sclk(3) and afe_sclk(4) and trim_sclk(4) and offset_sclk(4);
+afe34_mosi <= afe_mosi(3) or  trim_mosi(3) or  offset_mosi(3) or  afe_mosi(4) or  trim_mosi(4) or  offset_mosi(4);
+afe_miso(1) <= afe34_miso;
+afe_miso(2) <= afe34_miso;
+afe34_busy <= afe_busy(3) or trim_busy(3) or offset_busy(3) or afe_busy(4) or trim_busy(4) or offset_busy(4);
+
+-- need to add AXI interface stuff here...
 
 end spim_afe_arch;
