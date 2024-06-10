@@ -17,7 +17,7 @@ architecture spim_dac_testbench_arch of spim_dac_testbench is
 
 component AD5327 is
 port(
-    sclk: in std_logic;
+    sclk: in std_logic; -- 30MHz max
     din: in std_logic;
     sync_n: in std_logic;
     ldac_n: in std_logic;
@@ -26,6 +26,7 @@ port(
 end component;
 
 component spim_dac
+generic( CLKDIV: integer := 8 );
 port(
     dac_sclk: out std_logic;
     dac_din: out std_logic;
@@ -94,7 +95,7 @@ begin
 
 -- three serial DAC chips daisy chained...
 
-U50_inst: AD5327
+firstdac_inst: AD5327
 port map(
     sclk => sclk,
     din => din0,
@@ -103,7 +104,7 @@ port map(
     sdo => din1
 );
 
-U53_inst: AD5327
+middledac_inst: AD5327
 port map(
     sclk => sclk,
     din => din1,
@@ -112,7 +113,7 @@ port map(
     sdo => din2
 );
 
-U5_inst: AD5327
+lastdac_inst: AD5327
 port map(
     sclk => sclk,
     din => din2,
@@ -122,6 +123,7 @@ port map(
 );
 
 DUT: spim_dac
+generic map( CLKDIV => 8 ) -- SCLK is 100MHz/8 = 12.5MHz OK
 port map(
 
     dac_sclk => sclk,
@@ -193,18 +195,18 @@ end procedure axipeek;
 
 begin
 
--- start of simulation
-
-wait for 300ns;
-S_AXI_ARESETN <= '1'; -- release AXI reset
 wait for 500ns;
-axipoke(addr => X"00000000", data => X"00001234"); -- first DAC
-wait for 200ns;
-axipoke(addr => X"00000004", data => X"00005678"); -- middle DAC
-wait for 200ns;
-axipoke(addr => X"00000008", data => X"0000ABCD"); -- last DAC
-wait for 200ns;
-axipoke(addr => X"0000000C", data => X"DEADBEEF");  -- go
+S_AXI_ARESETN <= '1'; -- release AXI reset
+
+wait for 500ns;
+axipoke(addr => X"00000004", data => X"00001234"); -- first DAC
+wait for 500ns;
+axipoke(addr => X"00000008", data => X"00005678"); -- middle DAC
+wait for 500ns;
+axipoke(addr => X"0000000C", data => X"0000ABCD"); -- last DAC
+
+wait for 500ns;
+axipoke(addr => X"00000000", data => X"DEADBEEF");  -- write anything to CTRL register to GO!
 
 wait;
 end process aximaster_proc;
