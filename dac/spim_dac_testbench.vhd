@@ -16,6 +16,7 @@ end spim_dac_testbench;
 architecture spim_dac_testbench_arch of spim_dac_testbench is
 
 component AD5327 is
+generic(refdes: STRING := "U?");
 port(
     sclk: in std_logic; -- 30MHz max
     din: in std_logic;
@@ -96,6 +97,7 @@ begin
 -- three serial DAC chips daisy chained...
 
 firstdac_inst: AD5327
+generic map(refdes => "U50")
 port map(
     sclk => sclk,
     din => din0,
@@ -105,6 +107,7 @@ port map(
 );
 
 middledac_inst: AD5327
+generic map(refdes => "U53")
 port map(
     sclk => sclk,
     din => din1,
@@ -114,6 +117,7 @@ port map(
 );
 
 lastdac_inst: AD5327
+generic map(refdes => "U5")
 port map(
     sclk => sclk,
     din => din2,
@@ -199,14 +203,14 @@ wait for 500ns;
 S_AXI_ARESETN <= '1'; -- release AXI reset
 
 wait for 500ns;
-axipoke(addr => X"00000004", data => X"00001234"); -- first DAC
+axipoke(addr => X"00000004", data => X"00005050"); -- data to sent to first DAC U50
 wait for 500ns;
-axipoke(addr => X"00000008", data => X"00005678"); -- middle DAC
+axipoke(addr => X"00000008", data => X"00005353"); -- data to sent to middle DAC U53
 wait for 500ns;
-axipoke(addr => X"0000000C", data => X"0000ABCD"); -- last DAC
+axipoke(addr => X"0000000C", data => X"0000DAC5"); -- data to sent to last DAC U5
 
 wait for 500ns;
-axipoke(addr => X"00000000", data => X"DEADBEEF");  -- write anything to CTRL register to GO!
+axipoke(addr => X"00000000", data => X"DEADBEEF");  -- write anything to CTRL register... GO!
 
 wait;
 end process aximaster_proc;

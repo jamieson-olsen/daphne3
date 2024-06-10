@@ -7,11 +7,13 @@
 -- chips must be written at once. Each DAC chip takes 16 bits. The 3 data regsters are 
 -- non destructive: reading these register will return the last thing that was written.
 --
--- base+0: control reg: write anything here to initiate serial transfer to DACs (GO!)
---         status reg: read this register, LSb is set when it is busy doing SPI transaction
--- base+4:  16 bit data for U50 (read/write) 
--- base+8:  16 bit data for U53 (read/write)
--- base+12: 16 bit data for U5 (read/write)
+-- base+0: control/status register. write anything here to initiate serial transfer to DACs (GO!)
+--         read this register, LSb is set when it is busy doing SPI transaction
+-- base+4:  16 bit data for first DAC chip U50 (read/write) 
+-- base+8:  16 bit data for middle DAC chip U53 (read/write)
+-- base+12: 16 bit data for last DAC chip U5 (read/write)
+--
+-- with 100MHz AXI clock this module takes about 10us to shift the data into the DACs
 
 library ieee;
 use ieee.std_logic_1164.all;

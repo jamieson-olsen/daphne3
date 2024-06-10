@@ -7,6 +7,7 @@ use ieee.std_logic_1164.all;
 use std.textio;
 
 entity AD5327 is
+generic(refdes: STRING := "U?");
 port(
     sclk: in std_logic;
     din: in std_logic;
@@ -37,7 +38,7 @@ load_proc: process(ldac_n)
 begin
     if rising_edge(ldac_n) then -- the data register was just loaded
 
-        report "DAC load 0x" & to_hstring(data_reg(15 downto 0));
+        report "DAC " & refdes & " load 0x" & to_hstring(data_reg(15 downto 0));
 
     end if;
 end process load_proc;
