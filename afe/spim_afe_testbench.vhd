@@ -12,10 +12,10 @@ use unisim.vcomponents.all;
 
 use work.daphne3_package.all;
 
-entity cm_testbench is
-end cm_testbench;
+entity spim_afe_testbench is
+end spim_afe_testbench;
 
-architecture cm_testbench_arch of cm_testbench is
+architecture spim_afe_testbench_arch of spim_afe_testbench is
 
 component AFE5808A is -- simple BFM of the AFE SPI interface
 port(
@@ -45,40 +45,21 @@ port(
 
     afe0_miso: in std_logic;
     afe0_sclk: out std_logic;
-    afe0_sdata: out std_logic;
-    afe0_sen: out std_logic;
-    afe0_trim_csn: out std_logic;
-    afe0_trim_ldacn: out std_logic;
-    afe0_offset_csn: out std_logic;
-    afe0_offset_ldacn: out std_logic;
+    afe0_mosi: out std_logic;
 
     afe12_miso: in std_logic;
     afe12_sclk: out std_logic;
-    afe12_sdata: out std_logic;
-    afe1_sen: out std_logic;
-    afe2_sen: out std_logic;
-    afe1_trim_csn: out std_logic;
-    afe1_trim_ldacn: out std_logic;
-    afe1_offset_csn: out std_logic;
-    afe1_offset_ldacn: out std_logic;
-    afe2_trim_csn: out std_logic;
-    afe2_trim_ldacn: out std_logic;
-    afe2_offset_csn: out std_logic;
-    afe2_offset_ldacn: out std_logic;
+    afe12_mosi: out std_logic;
 
     afe34_miso: in std_logic;
     afe34_sclk: out std_logic;
-    afe34_sdata: out std_logic;
-    afe3_sen: out std_logic;
-    afe4_sen: out std_logic;
-    afe3_trim_csn: out std_logic;
-    afe3_trim_ldacn: out std_logic;
-    afe3_offset_csn: out std_logic;
-    afe3_offset_ldacn: out std_logic;
-    afe4_trim_csn: out std_logic;
-    afe4_trim_ldacn: out std_logic;
-    afe4_offset_csn: out std_logic;
-    afe4_offset_ldacn: out std_logic;
+    afe34_mosi: out std_logic;
+
+    afe_sen: out std_logic_vector(4 downto 0);
+    trim_sync_n: out std_logic_vector(4 downto 0);
+    trim_ldac_n: out std_logic_vector(4 downto 0);
+    offset_sync_n: out std_logic_vector(4 downto 0);
+    offset_ldac_n: out std_logic_vector(4 downto 0);
 
     S_AXI_ACLK: in std_logic;
     S_AXI_ARESETN: in std_logic;
@@ -134,21 +115,29 @@ signal S_AXI_RVALID: std_logic;
 
 signal afe_rst, afe_pdn: std_logic;
 
-signal afe0_sclk, afe0_sdata, afe0_sen, afe0_miso: std_logic;
-signal afe0_offset_csn, afe0_offset_ldacn, afe0_offset_sdo: std_logic;
-signal afe0_trim_csn, afe0_trim_ldacn, afe0_trim_sdo: std_logic;
+signal afe0_miso: std_logic;
+signal afe0_sclk: std_logic;
+signal afe0_mosi: std_logic;
 
-signal afe12_sclk, afe12_sdata, afe1_sen, afe2_sen, afe12_miso: std_logic;
-signal afe1_offset_csn, afe1_offset_ldacn, afe1_offset_sdo: std_logic;
-signal afe1_trim_csn, afe1_trim_ldacn, afe1_trim_sdo: std_logic;
-signal afe2_offset_csn, afe2_offset_ldacn, afe2_offset_sdo: std_logic;
-signal afe2_trim_csn, afe2_trim_ldacn, afe2_trim_sdo: std_logic;
+signal afe12_miso: std_logic;
+signal afe12_sclk: std_logic;
+signal afe12_mosi: std_logic;
 
-signal afe34_sclk, afe34_sdata, afe3_sen, afe4_sen, afe34_miso: std_logic;
-signal afe3_offset_csn, afe3_offset_ldacn, afe3_offset_sdo: std_logic;
-signal afe3_trim_csn, afe3_trim_ldacn, afe3_trim_sdo: std_logic;
-signal afe4_offset_csn, afe4_offset_ldacn, afe4_offset_sdo: std_logic;
-signal afe4_trim_csn, afe4_trim_ldacn, afe4_trim_sdo: std_logic;
+signal afe34_miso: std_logic;
+signal afe34_sclk: std_logic;
+signal afe34_mosi: std_logic;
+
+signal afe_sen: std_logic_vector(4 downto 0);
+signal trim_sync_n: std_logic_vector(4 downto 0);
+signal trim_ldac_n: std_logic_vector(4 downto 0);
+signal offset_sync_n: std_logic_vector(4 downto 0);
+signal offset_ldac_n: std_logic_vector(4 downto 0);
+
+signal afe0_offset_sdo, afe0_trim_sdo: std_logic;
+signal afe1_offset_sdo, afe1_trim_sdo: std_logic;
+signal afe2_offset_sdo, afe2_trim_sdo: std_logic;
+signal afe3_offset_sdo, afe3_trim_sdo: std_logic;
+signal afe4_offset_sdo, afe4_trim_sdo: std_logic;
 
 begin
 
@@ -159,17 +148,17 @@ port map(
     rst   => afe_rst,
     pdn   => afe_pdn,
     sclk  => afe0_sclk,
-    sdata => afe0_sdata,
-    sen   => afe0_sen,
+    sdata => afe0_mosi,
+    sen   => afe_sen(0),
     sdout => afe0_miso
 );
 
 AFE0_OFFSET0_inst: AD5327 
 port map(
     sclk   => afe0_sclk,
-    din    => afe0_sdata,
-    sync_n => afe0_offset_csn,
-    ldac_n => afe0_offset_ldacn,
+    din    => afe0_mosi,
+    sync_n => offset_sync_n(0),
+    ldac_n => offset_ldac_n(0),
     sdo    => afe0_offset_sdo
 );
 
@@ -177,17 +166,17 @@ AFE0_OFFSET1_inst: AD5327
 port map(
     sclk   => afe0_sclk,
     din    => afe0_offset_sdo,
-    sync_n => afe0_offset_csn,
-    ldac_n => afe0_offset_ldacn,
+    sync_n => offset_sync_n(0),
+    ldac_n => offset_ldac_n(0),
     sdo    => open
 );
 
 AFE0_TRIM0_inst: AD5327
 port map(
     sclk   => afe0_sclk,
-    din    => afe0_sdata,
-    sync_n => afe0_trim_csn,
-    ldac_n => afe0_trim_ldacn,
+    din    => afe0_mosi,
+    sync_n => trim_sync_n(0),
+    ldac_n => trim_ldac_n(0),
     sdo    => afe0_trim_sdo
 );
 
@@ -195,8 +184,8 @@ AFE0_TRIM1_inst: AD5327
 port map(
     sclk   => afe0_sclk,
     din    => afe0_trim_sdo,
-    sync_n => afe0_trim_csn,
-    ldac_n => afe0_trim_ldacn,
+    sync_n => trim_sync_n(0),
+    ldac_n => trim_ldac_n(0),
     sdo    => open
 );
 
@@ -207,17 +196,17 @@ port map(
     rst   => afe_rst,
     pdn   => afe_pdn,
     sclk  => afe12_sclk,
-    sdata => afe12_sdata,
-    sen   => afe1_sen,
+    sdata => afe12_mosi,
+    sen   => afe_sen(1),
     sdout => afe12_miso
 );
 
 AFE1_OFFSET0_inst: AD5327
 port map(
     sclk   => afe12_sclk,
-    din    => afe12_sdata,
-    sync_n => afe1_offset_csn,
-    ldac_n => afe1_offset_ldacn,
+    din    => afe12_mosi,
+    sync_n => offset_sync_n(1),
+    ldac_n => offset_ldac_n(1),
     sdo    => afe1_offset_sdo
 );
 
@@ -225,17 +214,17 @@ AFE1_OFFSET1_inst: AD5327
 port map(
     sclk   => afe12_sclk,
     din    => afe1_offset_sdo,
-    sync_n => afe1_offset_csn,
-    ldac_n => afe1_offset_ldacn,
+    sync_n => offset_sync_n(1),
+    ldac_n => offset_ldac_n(1),
     sdo    => open
 );
 
 AFE1_TRIM0_inst: AD5327
 port map(
     sclk   => afe12_sclk,
-    din    => afe12_sdata,
-    sync_n => afe1_trim_csn,
-    ldac_n => afe1_trim_ldacn,
+    din    => afe12_mosi,
+    sync_n => trim_sync_n(1),
+    ldac_n => trim_ldac_n(1),
     sdo    => afe1_trim_sdo
 );
 
@@ -243,8 +232,8 @@ AFE1_TRIM1_inst: AD5327
 port map(
     sclk   => afe12_sclk,
     din    => afe1_trim_sdo,
-    sync_n => afe1_trim_csn,
-    ldac_n => afe1_trim_ldacn,
+    sync_n => trim_sync_n(1),
+    ldac_n => trim_ldac_n(1),
     sdo    => open
 );
 
@@ -255,17 +244,17 @@ port map(
     rst   => afe_rst,
     pdn   => afe_pdn,
     sclk  => afe12_sclk,
-    sdata => afe12_sdata,
-    sen   => afe2_sen,
+    sdata => afe12_mosi,
+    sen   => afe_sen(2),
     sdout => afe12_miso
 );
 
 AFE2_OFFSET0_inst: AD5327
 port map(
     sclk   => afe12_sclk,
-    din    => afe12_sdata,
-    sync_n => afe2_offset_csn,
-    ldac_n => afe2_offset_ldacn,
+    din    => afe12_mosi,
+    sync_n => offset_sync_n(2),
+    ldac_n => offset_ldac_n(2),
     sdo    => afe2_offset_sdo
 );
 
@@ -273,17 +262,17 @@ AFE2_OFFSET1_inst: AD5327
 port map(
     sclk   => afe12_sclk,
     din    => afe2_offset_sdo,
-    sync_n => afe2_offset_csn,
-    ldac_n => afe2_offset_ldacn,
+    sync_n => offset_sync_n(2),
+    ldac_n => offset_ldac_n(2),
     sdo    => open
 );
 
 AFE2_TRIM0_inst: AD5327
 port map(
     sclk   => afe12_sclk,
-    din    => afe12_sdata,
-    sync_n => afe2_trim_csn,
-    ldac_n => afe2_trim_ldacn,
+    din    => afe12_mosi,
+    sync_n => trim_sync_n(2),
+    ldac_n => trim_ldac_n(2),
     sdo    => afe2_trim_sdo
 );
 
@@ -291,8 +280,8 @@ AFE2_TRIM1_inst: AD5327
 port map(
     sclk   => afe12_sclk,
     din    => afe2_trim_sdo,
-    sync_n => afe2_trim_csn,
-    ldac_n => afe2_trim_ldacn,
+    sync_n => trim_sync_n(2),
+    ldac_n => trim_ldac_n(2),
     sdo    => open
 );
 
@@ -303,17 +292,17 @@ port map(
     rst   => afe_rst,
     pdn   => afe_pdn,
     sclk  => afe34_sclk,
-    sdata => afe34_sdata,
-    sen   => afe3_sen,
+    sdata => afe34_mosi,
+    sen   => afe_sen(3),
     sdout => afe34_miso
 );
 
 AFE3_OFFSET0_inst: AD5327
 port map(
     sclk   => afe34_sclk,
-    din    => afe34_sdata,
-    sync_n => afe3_offset_csn,
-    ldac_n => afe3_offset_ldacn,
+    din    => afe34_mosi,
+    sync_n => offset_sync_n(3),
+    ldac_n => offset_ldac_n(3),
     sdo    => afe3_offset_sdo
 );
 
@@ -321,17 +310,17 @@ AFE3_OFFSET1_inst: AD5327
 port map(
     sclk   => afe34_sclk,
     din    => afe3_offset_sdo,
-    sync_n => afe3_offset_csn,
-    ldac_n => afe3_offset_ldacn,
+    sync_n => offset_sync_n(3),
+    ldac_n => offset_ldac_n(3),
     sdo    => open
 );
 
 AFE3_TRIM0_inst: AD5327
 port map(
     sclk   => afe34_sclk,
-    din    => afe34_sdata,
-    sync_n => afe3_trim_csn,
-    ldac_n => afe3_trim_ldacn,
+    din    => afe34_mosi,
+    sync_n => trim_sync_n(3),
+    ldac_n => trim_ldac_n(3),
     sdo    => afe3_trim_sdo
 );
 
@@ -339,8 +328,8 @@ AFE3_TRIM1_inst: AD5327
 port map(
     sclk   => afe34_sclk,
     din    => afe3_trim_sdo,
-    sync_n => afe3_trim_csn,
-    ldac_n => afe3_trim_ldacn,
+    sync_n => trim_sync_n(3),
+    ldac_n => trim_ldac_n(3),
     sdo    => open
 );
 
@@ -351,17 +340,17 @@ port map(
     rst   => afe_rst,
     pdn   => afe_pdn,
     sclk  => afe34_sclk,
-    sdata => afe34_sdata,
-    sen   => afe4_sen,
+    sdata => afe34_mosi,
+    sen   => afe_sen(4),
     sdout => afe34_miso
 );
 
 AFE4_OFFSET0_inst: AD5327
 port map(
     sclk   => afe34_sclk,
-    din    => afe34_sdata,
-    sync_n => afe4_offset_csn,
-    ldac_n => afe4_offset_ldacn,
+    din    => afe34_mosi,
+    sync_n => offset_sync_n(4),
+    ldac_n => offset_ldac_n(4),
     sdo    => afe4_offset_sdo
 );
 
@@ -369,17 +358,17 @@ AFE4_OFFSET1_inst: AD5327
 port map(
     sclk   => afe34_sclk,
     din    => afe4_offset_sdo,
-    sync_n => afe4_offset_csn,
-    ldac_n => afe4_offset_ldacn,
+    sync_n => offset_sync_n(4),
+    ldac_n => offset_ldac_n(4),
     sdo    => open
 );
 
 AFE4_TRIM0_inst: AD5327
 port map(
     sclk   => afe34_sclk,
-    din    => afe34_sdata,
-    sync_n => afe4_trim_csn,
-    ldac_n => afe4_trim_ldacn,
+    din    => afe34_mosi,
+    sync_n => trim_sync_n(4),
+    ldac_n => trim_ldac_n(4),
     sdo    => afe4_trim_sdo
 );
 
@@ -387,8 +376,8 @@ AFE4_TRIM1_inst: AD5327
 port map(
     sclk   => afe34_sclk,
     din    => afe4_trim_sdo,
-    sync_n => afe4_trim_csn,
-    ldac_n => afe4_trim_ldacn,
+    sync_n => trim_sync_n(4),
+    ldac_n => trim_ldac_n(4),
     sdo    => open
 );
 
@@ -398,42 +387,23 @@ port map(
     afe_rst => afe_rst,
     afe_pdn => afe_pdn,
 
-    afe0_sclk         => afe0_sclk,
-    afe0_sdata        => afe0_sdata,
-    afe0_sen          => afe0_sen,
-    afe0_miso         => afe0_miso,
-    afe0_trim_csn     => afe0_trim_csn,
-    afe0_trim_ldacn   => afe0_trim_ldacn,
-    afe0_offset_csn   => afe0_offset_csn,
-    afe0_offset_ldacn => afe0_offset_ldacn,
+    afe0_miso => afe0_miso,
+    afe0_sclk => afe0_sclk,
+    afe0_mosi => afe0_mosi,
 
-    afe12_sclk         => afe12_sclk,
-    afe12_sdata        => afe12_sdata,
-    afe1_sen           => afe1_sen,
-    afe2_sen           => afe2_sen,
-    afe12_miso         => afe12_miso,
-    afe1_trim_csn      => afe1_trim_csn,
-    afe1_trim_ldacn    => afe1_trim_ldacn,
-    afe1_offset_csn    => afe1_offset_csn,
-    afe1_offset_ldacn  => afe1_offset_ldacn,
-    afe2_trim_csn      => afe2_trim_csn,
-    afe2_trim_ldacn    => afe2_trim_ldacn,
-    afe2_offset_csn    => afe2_offset_csn,
-    afe2_offset_ldacn  => afe2_offset_ldacn,
+    afe12_miso => afe12_miso,
+    afe12_sclk => afe12_sclk,
+    afe12_mosi => afe12_mosi,
 
-    afe34_sclk         => afe34_sclk,
-    afe34_sdata        => afe34_sdata,
-    afe3_sen           => afe3_sen,
-    afe4_sen           => afe4_sen,
-    afe34_miso         => afe34_miso,
-    afe3_trim_csn      => afe3_trim_csn,
-    afe3_trim_ldacn    => afe3_trim_ldacn,
-    afe3_offset_csn    => afe3_offset_csn,
-    afe3_offset_ldacn  => afe3_offset_ldacn,
-    afe4_trim_csn      => afe4_trim_csn,
-    afe4_trim_ldacn    => afe4_trim_ldacn,
-    afe4_offset_csn    => afe4_offset_csn,
-    afe4_offset_ldacn  => afe4_offset_ldacn,
+    afe34_miso => afe34_miso,
+    afe34_sclk => afe34_sclk,
+    afe34_mosi => afe34_mosi,
+
+    afe_sen => afe_sen,
+    trim_sync_n => trim_sync_n,
+    trim_ldac_n => trim_ldac_n,
+    offset_sync_n => offset_sync_n,
+    offset_ldac_n => offset_ldac_n,
 
     S_AXI_ACLK    => S_AXI_ACLK,
     S_AXI_ARESETN => S_AXI_ARESETN,
@@ -499,42 +469,28 @@ end procedure axipeek;
 
 begin
 
-wait for 300ns;
+wait for 500ns;
 S_AXI_ARESETN <= '1'; -- release AXI reset
-wait for 500ns;
-
--- assume the AXI slave base address is 0
-
--- get ready to transfer 4 bytes
-
-axipoke(addr => X"00000000", data => X"00000012"); 
-wait for 500ns;
-axipoke(addr => X"00000000", data => X"00000034"); 
-wait for 500ns;
-axipoke(addr => X"00000000", data => X"00000056"); 
-wait for 500ns;
-axipoke(addr => X"00000000", data => X"00000078"); 
-
--- go!
 
 wait for 500ns;
-axipoke(addr => X"00000004", data => X"DEADBEEF");
-
--- wait while it is busy....
-wait for 1000ns;
-
--- read what was sent back
+axipoke(addr => X"00000000", data => X"00000003"); -- power down all AFEs and hard reset all AFEs
 
 wait for 500ns;
-axipeek(addr => X"00000000");
+axipoke(addr => X"00000000", data => X"00000001"); -- release power down, continue to force hard reset all AFEs
+
 wait for 500ns;
-axipeek(addr => X"00000000");
+axipoke(addr => X"00000000", data => X"00000000"); -- release hard reset all AFEs
+
 wait for 500ns;
-axipeek(addr => X"00000000");
-wait for 500ns;
-axipeek(addr => X"00000000");
+axipoke(addr => X"00000004", data => X"008000FF"); -- write 24 bits to AFE0 SPI interface (busy for ~3us)
+
+wait for 3us;
+axipoke(addr => X"00000008", data => X"DEADBEEF"); -- write trim0 dacs (busy for ~4us)
+
+wait for 4us;
+axipoke(addr => X"0000000C", data => X"0FF5E770"); -- write offset0 dacs (busy for ~4us)
 
 wait;
 end process aximaster_proc;
 
-end cm_testbench_arch;
+end spim_afe_testbench_arch;
