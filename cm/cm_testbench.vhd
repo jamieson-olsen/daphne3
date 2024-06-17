@@ -25,7 +25,7 @@ port(
 );
 end component;
 
-component spim_cm
+component spim_cm -- custom SPI master logic for the current monitor
 port(
     cm_sclk: out std_logic;
     cm_csn: out std_logic;
@@ -171,40 +171,30 @@ end procedure axipeek;
 
 begin
 
-wait for 300ns;
-S_AXI_ARESETN <= '1'; -- release AXI reset
-wait for 500ns;
-
--- assume the AXI slave base address is 0
-
--- get ready to transfer 4 bytes
-
-axipoke(addr => X"00000000", data => X"00000012"); 
-wait for 500ns;
-axipoke(addr => X"00000000", data => X"00000034"); 
-wait for 500ns;
-axipoke(addr => X"00000000", data => X"00000056"); 
-wait for 500ns;
-axipoke(addr => X"00000000", data => X"00000078"); 
-
--- go!
-
-wait for 500ns;
-axipoke(addr => X"00000004", data => X"DEADBEEF");
-
--- wait while it is busy....
-wait for 1000ns;
-
--- read what was sent back
-
-wait for 500ns;
-axipeek(addr => X"00000000");
-wait for 500ns;
-axipeek(addr => X"00000000");
-wait for 500ns;
-axipeek(addr => X"00000000");
-wait for 500ns;
-axipeek(addr => X"00000000");
+    wait for 300ns;
+    S_AXI_ARESETN <= '1'; -- release AXI reset
+    
+    wait for 500ns;
+    axipoke(addr => X"00000000", data => X"00000012"); -- Write 4 bytes into the input FIFO 
+    wait for 500ns;
+    axipoke(addr => X"00000000", data => X"00000034"); 
+    wait for 500ns;
+    axipoke(addr => X"00000000", data => X"00000056"); 
+    wait for 500ns;
+    axipoke(addr => X"00000000", data => X"00000078"); 
+    
+    wait for 500ns;
+    axipoke(addr => X"00000004", data => X"DEADBEEF"); -- GO!
+    
+    wait for 5us; -- wait while SPI shifting is going on
+    
+    axipeek(addr => X"00000000"); -- read four bytes from the output FIFO
+    wait for 300ns;
+    axipeek(addr => X"00000000");
+    wait for 300ns;
+    axipeek(addr => X"00000000");
+    wait for 400ns;
+    axipeek(addr => X"00000000");
 
 wait;
 end process aximaster_proc;

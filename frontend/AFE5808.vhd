@@ -1,5 +1,5 @@
 -- AFE5808.vhd
--- simple model of an AFE chip in 16 bit mode, configured for sending LSb first
+-- simple model of an AFE chip in 16 bit mode, configured for sending *** LSb first ***
 -- 14 bit ADC data padded into 16 bits by adding two zeros in the LSb positions
 -- FOR EXAMPLE: the 14 bit data 0x218F is transmitted:  00 1111 0001 1000 
 -- dclk output is omitted because the FPGA does need it...
@@ -29,7 +29,7 @@ architecture AFE5808_arch of AFE5808 is -- these are 16 bit patterns
     signal d5_vec: std_logic_vector(15 downto 0) := "0000000000000000"; -- 0x0000 
     signal d6_vec: std_logic_vector(15 downto 0) := "1010101111001101"; -- 0xABCD
     signal d7_vec: std_logic_vector(15 downto 0) := "0000000000000000"; -- ADC count up mode
-    signal d8_vec: std_logic_vector(15 downto 0) := "1111111100000000"; -- aka FCLK 
+    signal d8_vec: std_logic_vector(15 downto 0) := "0000000011111111"; -- aka FCLK LSb FIRST MODE
 
     constant bit_time: time := 1.000ns;  -- 16.000ns / 16
 
