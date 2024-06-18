@@ -18,7 +18,7 @@
 -- 0. disable IDELAY voltage/temperature compensation (EN_VTC=0)
 -- 1. Look at the FCLK data word (trigger and read spy buffers), sweep the delay values (512 steps) and determine the bit edges by observing 
 --    when the word value changes. Choose a delay tap value in the middle of a bit.
--- 2. Try different values of BITSLIP until the FCLK word reads 0xFF00
+-- 2. Try different values of BITSLIP until the FCLK word reads 0x00FF
 -- 3. put the AFE chip into one of the test modes, recommend count up
 -- 4. read data channels (spy buffers), verify that it is counting up properly for each data channel
 -- 5. put AFE back into normal data mode, 

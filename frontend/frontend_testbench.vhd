@@ -1,5 +1,4 @@
 -- testbench for DAPHNE3 deskew and alignment front end
--- TO DO: update this for AXI-LITE control and 5 AFEs!!!
 --
 -- jamieson olsen <jamieson@fnal.gov>
 
@@ -250,13 +249,13 @@ axipoke(addr => X"00000000", data => X"00000004");
 
 -- now we need to sweep bitslip values for afe0...
 
-for i in 0 to 8 loop
+for i in 0 to 15 loop
     wait for 200ns;
     axipoke(addr => X"00000020", data => std_logic_vector(to_unsigned(i,32)) );
 end loop;
 
 -- ok we determined that BITSLIP=8 is the correct bitslip value for AFE0
--- because that makes afe0 dout8 (frame marker) the correct value of 0xFF00
+-- because that makes afe0 dout8 (frame marker) the correct value of 0x00FF
 -- ok to apply this bitslip value to all other AFEs in this simulation...
 
 wait for 200ns;

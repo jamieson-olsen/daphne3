@@ -43,7 +43,7 @@ architecture febit3_arch of febit3 is
 
     -- signal clk500_b: std_logic;
     signal din_ibuf, din_delayed : std_logic;
-    signal q, q_reg, q2_reg: std_logic_vector(7 downto 0);
+    signal q, q_reg, q2_reg, q3_reg: std_logic_vector(7 downto 0);
     signal dout_reg: std_logic_vector(15 downto 0);
     
 begin
@@ -130,6 +130,7 @@ begin
     if rising_edge(clk125) then
         q_reg <= q;
         q2_reg <= q_reg;
+        q3_reg <= q2_reg;
     end if;
 end process byte_proc;
 
@@ -154,7 +155,14 @@ begin
             when "0101" => dout_reg <= q(2 downto 0) & q_reg(7 downto 0) & q2_reg(7 downto 3);
             when "0110" => dout_reg <= q(1 downto 0) & q_reg(7 downto 0) & q2_reg(7 downto 2);
             when "0111" => dout_reg <= q(0)          & q_reg(7 downto 0) & q2_reg(7 downto 1);
-            when others => dout_reg <=                 q_reg(7 downto 0) & q2_reg(7 downto 0);
+            when "1000" => dout_reg <=                 q_reg(7 downto 0) & q2_reg(7 downto 0);
+            when "1001" => dout_reg <=                 q_reg(6 downto 0) & q2_reg(7 downto 0) & q3_reg(7);
+            when "1010" => dout_reg <=                 q_reg(5 downto 0) & q2_reg(7 downto 0) & q3_reg(7 downto 6);
+            when "1011" => dout_reg <=                 q_reg(4 downto 0) & q2_reg(7 downto 0) & q3_reg(7 downto 5);
+            when "1100" => dout_reg <=                 q_reg(3 downto 0) & q2_reg(7 downto 0) & q3_reg(7 downto 4);
+            when "1101" => dout_reg <=                 q_reg(2 downto 0) & q2_reg(7 downto 0) & q3_reg(7 downto 3);
+            when "1110" => dout_reg <=                 q_reg(1 downto 0) & q2_reg(7 downto 0) & q3_reg(7 downto 2);
+            when others => dout_reg <=                 q_reg(0)          & q2_reg(7 downto 0) & q3_reg(7 downto 1);
         end case;
     end if;
 end process clock_proc;
