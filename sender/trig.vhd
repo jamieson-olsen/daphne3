@@ -1,11 +1,14 @@
 -- trig.vhd
--- an example of a very simple trigger algorithm for the DAPHNE self triggered mode
+-- an EXAMPLE of a very simple trigger algorithm for the DAPHNE self triggered mode
 --
 -- baseline, threshold, din are UNSIGNED 
 --
--- this determination is very simple and requires only a few clock cycles
+-- In this EXAMPLE the trigger algorithm is very simple and requires only a few clock cycles
 -- however, this module adds extra pipeline stages so that the overall latency 
--- is 64 clocks. this is done to allow for more advanced triggers.
+-- is 128 clocks. this is done to allow for more advanced triggers.
+--
+-- If a more advanced trigger is used in place of this module, the overall latency MUST
+-- match this module, since the rest of the self-triggered sender logic depends on it.
 
 library ieee;
 use ieee.std_logic_1164.all;
@@ -17,9 +20,9 @@ use unisim.vcomponents.all;
 entity trig is
 port(
     clock: in std_logic;
-    din: in std_logic_vector(13 downto 0); -- raw AFE data
-    threshold: in std_logic_vector(13 downto 0); -- trigger threshold relative to baseline
-    baseline: in std_logic_vector(13 downto 0); -- average signal level computed over past 256 samples
+    din: in std_logic_vector(13 downto 0);        -- raw AFE data aligned to clock
+    threshold: in std_logic_vector(13 downto 0);  -- trigger threshold relative to baseline
+    baseline: in std_logic_vector(13 downto 0);   -- average signal level computed over past N samples
     triggered: out std_logic;
     trigsample: out std_logic_vector(13 downto 0) -- the sample that caused the trigger
 );
@@ -29,7 +32,7 @@ architecture trig_arch of trig is
 
     signal din0, din1, din2: std_logic_vector(13 downto 0) := "00000000000000";
     signal trig_thresh, trigsample_reg: std_logic_vector(13 downto 0) := (others=>'0');
-    signal triggered_i, triggered_dly32_i: std_logic := '0';
+    signal triggered_i, triggered_dly32_i, triggered_dly64_i, triggered_dly96_i: std_logic := '0';
 
 begin
 
@@ -53,7 +56,7 @@ begin
 
     triggered_i <= '1' when ( din2>trig_thresh and din1<trig_thresh and din0<trig_thresh ) else '0';
 
-    -- add in some fake/synthetic latency, adjust it so total trigger latency is 64 clocks
+    -- add in some fake/synthetic latency, adjust it so total trigger latency is 128 clocks
 
     srlc32e_0_inst : srlc32e
     port map(
@@ -69,8 +72,28 @@ begin
     port map(
         clk => clock,
         ce  => '1',
-        a   => "11011",  -- adjust this delay to make overall latency = 64
+        a   => "11111",
         d   => triggered_dly32_i,
+        q   => open,
+        q31 => triggered_dly64_i
+    );
+
+    srlc32e_2_inst : srlc32e
+    port map(
+        clk => clock,
+        ce  => '1',
+        a   => "11111",
+        d   => triggered_dly64_i,
+        q   => open,
+        q31 => triggered_dly96_i
+    );
+
+    srlc32e_3_inst : srlc32e
+    port map(
+        clk => clock,
+        ce  => '1',
+        a   => "11011",  -- fine tune this delay to make overall latency = 128
+        d   => triggered_dly96_i,
         q   => triggered,
         q31 => open
     );
