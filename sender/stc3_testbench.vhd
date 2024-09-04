@@ -8,9 +8,6 @@ use ieee.numeric_std.all;
 use STD.textio.all;
 use ieee.std_logic_textio.all;
 
-library unisim;
-use unisim.vcomponents.all;
-
 entity stc3_testbench is
 end stc3_testbench;
 
@@ -41,7 +38,7 @@ end component;
 
 signal reset: std_logic := '1';
 signal clock: std_logic := '0';
-signal timestamp: std_logic_vector(63 downto 0) := X"0000000000000000";
+signal ts: std_logic_vector(63 downto 0) := X"0000000000000000";
 signal din: std_logic_vector(13 downto 0) := "00000001000000";
 
 begin
@@ -49,41 +46,26 @@ begin
 clock <= not clock after 8.000 ns; --  62.500 MHz
 reset <= '1', '0' after 96ns;
 
-ts_proc: process 
+transactor: process(clock)
+    file test_vector: text open read_mode is "$dsn/src/sender/stc3_testbench.txt";
+    variable row: line;
+    variable v_ts: integer := 0;
+    variable v_din: integer := 0;
 begin 
-    wait until rising_edge(clock);
-    timestamp <= std_logic_vector(unsigned(timestamp) + 1);
-end process ts_proc;
+    if rising_edge(clock) then
+   
+        if(not endfile(test_vector)) then
+            readline(test_vector,row);
+        end if;
 
-waveform_proc: process
-begin 
+        read(row, v_ts);
+        read(row, v_din);
 
-    -- establish baseline level mid scale 
+        ts <= std_logic_vector( to_unsigned(v_ts,64) );
+        din <= std_logic_vector( to_unsigned(v_din,14) );
 
-    for i in 1 to 1000 loop
-        wait until rising_edge(clock);
-        din <= std_logic_vector( to_unsigned(8000+i,14) );
-    end loop;
-
-    -- sharp falling edge!
-
-    wait until rising_edge(clock);
-    din <= std_logic_vector( to_unsigned(5000,14) );
-    wait until rising_edge(clock);
-    din <= std_logic_vector( to_unsigned(3000,14) );
-    wait until rising_edge(clock);
-    din <= std_logic_vector( to_unsigned(2000,14) );
-	
-	-- now a slow rise back up to baseline....
-	
-    for i in 1 to 2000 loop
-        wait until rising_edge(clock);
-        din <= std_logic_vector( to_unsigned(2000+i,14) );
-    end loop;
-
-    wait;
-
-end process waveform_proc;
+    end if;    
+end process transactor;
 
 DUT: stc3
 generic map( runlength => 64 )
@@ -92,7 +74,7 @@ port map(
     reset => reset,
     enable => '1',
     threshold => "00000100000000",
-    timestamp => timestamp,
+    timestamp => ts,
 	din => din
 );
 

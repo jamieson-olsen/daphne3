@@ -59,7 +59,7 @@ type state_type is (rst, wait4trig, w0, w1, w2, w3, w4, w5, w6,
                     h0, h1, h2, h3, h4, h5, h6, h7, h8, hold, dump0, dump1, dump2);
 signal state: state_type;
 
-signal ts_reg: std_logic_vector(63 downto 0) := (others=>'0');
+signal sample0_timestamp: std_logic_vector(63 downto 0) := (others=>'0');
 signal bline, trigsample: std_logic_vector(13 downto 0) := (others=>'0');
 signal triggered: std_logic := '0';
 
@@ -201,6 +201,12 @@ port map(
 -- one BLOCK = 32 14-bit samples DENSE PACKED into 7 64-bit words
 -- one SUPERBLOCK = 32 blocks = 1024 samples = 224 64 bit words
 
+-- sample0 is the first sample packed into the output record
+-- sample0...sample63 = pretrigger
+-- sample64 = trigger sample
+-- sample65...sample1023 = post trigger
+-- the timestamp value recorded in the output record corresponds to sample0 NOT the trigger sample!
+
 builder_fsm_proc: process(clock)
 begin
     if rising_edge(clock) then
@@ -213,7 +219,7 @@ begin
                 when wait4trig => 
                     if (triggered='1' and enable='1') then -- start packing
                         block_count <= 0;
-                        ts_reg <= std_logic_vector( unsigned(timestamp) - 125 ); -- this offset is fixed and determined by simulation
+                        sample0_timestamp <= std_logic_vector( unsigned(timestamp) - 189 ); 
                         state <= w0; 
                     else
                         state <= wait4trig;
@@ -330,7 +336,7 @@ end process builder_fsm_proc;
 -- mux to determine what is written into the output buffer, note this is 72 bits to match ultraram bus
 
 DIN_A <= X"0000000000" & link_id & slot_id & crate_id & detector_id & version_id when (state=h0) else
-         X"00" & ts_reg(63 downto 0) when (state=h1) else
+         X"00" & sample0_timestamp when (state=h1) else
          X"00" & "0000000000" & ch_id & "00" & bline & "00" & threshold & "00" & trigsample when (state=h2) else
          -- add header 3 through header 8 assignments here...
          X"00" & R0(7 downto 0) & R1 & R2 & R3 & R4                    when (state=d0) else -- sample4l ... sample0
@@ -442,7 +448,9 @@ port map (
    SLEEP => '0'
 );
 
-dout  <= DOUT_B(63 downto 0) when (state=dump1) else (others=>'0');
+dout  <= DOUT_B(63 downto 0) when (state=dump1) else
+         DOUT_B(63 downto 0) when (state=dump2) else
+         (others=>'0');
 
 valid <= '1' when (state=dump1) else
          '1' when (state=dump2) else 
