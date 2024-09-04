@@ -64,7 +64,7 @@ signal bline, trigsample: std_logic_vector(13 downto 0) := (others=>'0');
 signal triggered: std_logic := '0';
 
 signal DIN_A, DOUT_B: std_logic_vector(71 downto 0) := (others=>'0');
-signal EN_A, EN_B: std_logic := '0';
+signal EN_A, EN_B, SLEEP: std_logic := '0';
 signal BWE_A: std_logic_vector(8 downto 0) := (others=>'0');
 signal addra, addrb: integer range 0 to 255 := 0;
 signal ADDR_A, ADDR_B: std_logic_vector(22 downto 0) := (others=>'0');
@@ -379,6 +379,10 @@ EN_B <= '1' when (state=dump0) else
         '1' when (state=dump2) else
         '0';
 
+SLEEP <= '1' when (state=rst) else
+         '1' when (state=wait4trig) else
+         '0';
+
 -- UltraRAM address bus is 23 bits, addra and addrb pointers are 8 bit
 
 ADDR_A <= "000000000000000" & std_logic_vector( to_unsigned(addra,8) );
@@ -445,7 +449,7 @@ port map (
    RDB_WR_B => '0', -- port B read only
    RST_A => '0',
    RST_B => '0',
-   SLEEP => '0'
+   SLEEP => SLEEP -- put into low power mode when idle
 );
 
 dout  <= DOUT_B(63 downto 0) when (state=dump1) else
