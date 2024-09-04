@@ -367,7 +367,14 @@ BWE_A <= "111111111" when (state=h0) else  -- port A write enable
          "000000000";
 
 EN_A <= '0' when (state=rst) else
-        '0' when (state=wait4trig) else 
+        '0' when (state=wait4trig) else
+        '0' when (state=w0) else  -- hold enable low during wait states to allow the UltraRAM to "wake up" after SLEEPing
+        '0' when (state=w1) else
+        '0' when (state=w2) else
+        '0' when (state=w3) else
+        '0' when (state=w4) else
+        '0' when (state=w5) else
+        '0' when (state=w6) else
         '0' when (state=hold) else 
         '0' when (state=dump0) else 
         '0' when (state=dump1) else 
