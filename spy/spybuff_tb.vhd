@@ -16,8 +16,8 @@ port(
     trig:  in std_logic; -- trigger pulse sync to clock
     data:  in std_logic_vector(15 downto 0); -- afe data sync to clock
 
-    clka:  in  std_logic; -- 
-    addra: in  std_logic_vector(10 downto 0); -- 2k x 32 RAM interface is R/W
+    clka:  in  std_logic;
+    addra: in  std_logic_vector(9 downto 0); -- 1k x 32 RAM interface is R/W
 	ena:   in  std_logic;
 	wea:   in  std_logic;
 	dina:  in  std_logic_vector(31 downto 0);
@@ -34,7 +34,7 @@ signal data: std_logic_vector(15 downto 0) := X"0000";
 signal trig: std_logic := '0';
 
 signal ena, wea: std_logic := '0';
-signal addra: std_logic_vector(10 downto 0) := (others=>'0');
+signal addra: std_logic_vector(9 downto 0) := (others=>'0');
 signal dina: std_logic_vector(31 downto 0) := (others=>'0');
 
 begin
@@ -92,14 +92,14 @@ begin
     wait for 80us;
     wait until rising_edge(clka);
     ena <= '1';
-    addra <= "00000000000";   
+    addra <= "0000000000";   
     wait until rising_edge(clka);
-    addra <= "00000000001";   
+    addra <= "0000000001";   
     wait until rising_edge(clka);
-    addra <= "00000000010";   
+    addra <= "0000000010";   
     wait until rising_edge(clka);
     ena <= '0';
-    addra <= "00000000000";   
+    addra <= "0000000000";   
     wait;
 end process read_proc;
 

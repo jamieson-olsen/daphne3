@@ -2,7 +2,7 @@
 --
 -- DAPHNE spy buffer for one link AFE output, stores 4k 16-bit samples
 -- reset only resets the trigger logic, it does not erase the buffer contents
--- triggered on low to to high pulse, then writes next 4096 words into buffer, stops and waits for next trigger
+-- triggered on low to to high pulse, then writes next 2048 words into buffer, stops and waits for next trigger
 -- add delay elements to produce 64 deep delay for fixed pretrigger
 --
 -- The "A" port on this buffer is intended to connect to the AXI-Lite interface
@@ -23,8 +23,8 @@ port(
     trig:  in std_logic; -- trigger pulse sync to clock
     data:  in std_logic_vector(15 downto 0); -- afe data sync to clock
 
-    clka:  in  std_logic; -- RAM interface is 2k x 32 and is R/W
-    addra: in  std_logic_vector(10 downto 0);
+    clka:  in  std_logic;
+    addra: in  std_logic_vector(9 downto 0); -- 1k x 32 R/W
 	ena:   in  std_logic;
 	wea:   in  std_logic;
 	dina:  in  std_logic_vector(31 downto 0);
@@ -35,7 +35,7 @@ end spybuff;
 architecture spybuff_arch of spybuff is
 
     signal reset_reg: std_logic;
-    signal addr_reg: std_logic_vector(11 downto 0);
+    signal addr_reg: std_logic_vector(10 downto 0);
     signal data_reg, data_q, data_delayed: std_logic_vector(15 downto 0);
     signal we_reg:   std_logic;
 
@@ -45,13 +45,13 @@ architecture spybuff_arch of spybuff is
 	component spyram
 	port (
 			clka:  in  std_logic;
-			addra: in  std_logic_vector(10 downto 0); -- 2k x 32 R/W axi
+			addra: in  std_logic_vector( 9 downto 0); -- 1k x 32 R/W axi
 	        dina:  in  std_logic_vector(31 downto 0);
 	        ena:   in  std_logic;
 	        wea:   in  std_logic;
 	        douta: out std_logic_vector(31 downto 0);
 	        clkb:  in  std_logic;
-	        addrb: in  std_logic_vector(11 downto 0); -- 4k x 16 writeonly spybuff
+	        addrb: in  std_logic_vector(10 downto 0); -- 2k x 16 writeonly spybuff
 	        dinb:  in  std_logic_vector(15 downto 0);
 	        web:   in  std_logic
 		);
@@ -110,10 +110,10 @@ begin
                         else
                             state <= wait4trig;
                             we_reg <= '0';
-                            addr_reg <= X"000";
+                            addr_reg <= (others=>'0');
                         end if;
                     when store =>
-                        if (addr_reg=X"FFF") then
+                        if (addr_reg="11111111111") then
                             state <= wait4done;
                             we_reg <= '0';
                         else
@@ -145,7 +145,7 @@ begin
 		douta => douta,
 
 		clkb => clock, -- Port B written to by THIS logic
-		addrb => addr_reg, -- 12 bit write address
+		addrb => addr_reg, -- 11 bit write address
 		dinb => data_reg,
 		web => we_reg
 	);

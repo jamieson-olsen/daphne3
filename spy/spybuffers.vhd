@@ -1,69 +1,84 @@
 -- spybuffers.vhd
 --
 -- 45 spy buffers for AFE data + 4 spy buffers for the 64 bit timestamp
--- each spy buffer stores 4k 16-bit samples which includes 64 pre-trig samples
--- each spy buffer appears as a 2k x 32 memory block which is R/W from the AXI bus
+-- each spy buffer stores 2k 16-bit samples which includes 64 pre-trig samples
+-- each spy buffer appears as a 1k x 32 memory block which is R/W from the AXI bus
 --
 -- Now normally one would not write anything to a spy buffer from AXI 
 -- but it might be useful for debugging. All AXI-LITE transactions must be 32 bits.
 --
--- memory map: 
+-- each spy buffer is 1024 32-bit words, but AXI addressing is BYTE based not WORD based
+-- but AXI-LITE always accesses 32 bits at time. Kinda funky.
+-- The lower 2 bits of the AXI address should always be "00". Sample0 is the FIRST sample
+-- captured and Sample1023 is the last sample captured in each spy buffer. Two samples
+-- are packed into each 32 bit word.
 --
---  start_AXI_addr	  end_AXI_addr	    Buffer Description
---  BASE+00000        BASE+01FFC        AFE0 channel 0
---  BASE+02000        BASE+03FFC        AFE0 channel 1
---  BASE+04000        BASE+05FFC        AFE0 channel 2
---  BASE+06000        BASE+07FFC        AFE0 channel 3
---  BASE+08000        BASE+09FFC        AFE0 channel 4
---  BASE+0A000        BASE+0BFFC        AFE0 channel 5
---  BASE+0C000        BASE+0DFFC        AFE0 channel 6
---  BASE+0E000        BASE+0FFFC        AFE0 channel 7
---  BASE+10000        BASE+11FFC        AFE0 channel 8
---  BASE+12000        BASE+13FFC        AFE1 channel 0
---  BASE+14000        BASE+15FFC        AFE1 channel 1
---  BASE+16000        BASE+17FFC        AFE1 channel 2
---  BASE+18000        BASE+19FFC        AFE1 channel 3
---  BASE+1A000        BASE+1BFFC        AFE1 channel 4
---  BASE+1C000        BASE+1DFFC        AFE1 channel 5
---  BASE+1E000        BASE+1FFFC        AFE1 channel 6
---  BASE+20000        BASE+21FFC        AFE1 channel 7
---  BASE+22000        BASE+23FFC        AFE1 channel 8
---  BASE+24000        BASE+25FFC        AFE2 channel 0
---  BASE+26000        BASE+27FFC        AFE2 channel 1
---  BASE+28000        BASE+29FFC        AFE2 channel 2
---  BASE+2A000        BASE+2BFFC        AFE2 channel 3
---  BASE+2C000        BASE+2DFFC        AFE2 channel 4
---  BASE+2E000        BASE+2FFFC        AFE2 channel 5
---  BASE+30000        BASE+31FFC        AFE2 channel 6
---  BASE+32000        BASE+33FFC        AFE2 channel 7
---  BASE+34000        BASE+35FFC        AFE2 channel 8
---  BASE+36000        BASE+37FFC        AFE3 channel 0
---  BASE+38000        BASE+39FFC        AFE3 channel 1
---  BASE+3A000        BASE+3BFFC        AFE3 channel 2
---  BASE+3C000        BASE+3DFFC        AFE3 channel 3
---  BASE+3E000        BASE+3FFFC        AFE3 channel 4
---  BASE+40000        BASE+41FFC        AFE3 channel 5
---  BASE+42000        BASE+43FFC        AFE3 channel 6
---  BASE+44000        BASE+45FFC        AFE3 channel 7
---  BASE+46000        BASE+47FFC        AFE3 channel 8
---  BASE+48000        BASE+49FFC        AFE4 channel 0
---  BASE+4A000        BASE+4BFFC        AFE4 channel 1
---  BASE+4C000        BASE+4DFFC        AFE4 channel 2
---  BASE+4E000        BASE+4FFFC        AFE4 channel 3
---  BASE+50000        BASE+51FFC        AFE4 channel 4
---  BASE+52000        BASE+53FFC        AFE4 channel 5
---  BASE+54000        BASE+55FFC        AFE4 channel 6
---  BASE+56000        BASE+57FFC        AFE4 channel 7
---  BASE+58000        BASE+59FFC        AFE4 channel 8
---  BASE+5A000        BASE+5BFFC        TimeStamp(15..0)
---  BASE+5C000        BASE+5DFFC        TimeStamp(31..16)
---  BASE+5E000        BASE+5FFFC        TimeStamp(47..32)
---  BASE+60000        BASE+61FFC        TimeStamp(63..48)
+-- So here are some example AXI reads...
+--
+-- AXI read base+0    returns AFE0, channel 0, sample1(15..0) & sample0(15..0)
+-- AXI read base+4    returns AFE0, channel 0, sample3(15..0) & sample2(15..0)
+-- AXI read base+8    returns AFE0, channel 0, sample5(15..0) & sample4(15..0)
+-- AXI read base+4092 returns AFE0, channel 0, sample1023(15..0) & sample1022(15..0)
+-- AXI read base+4096 returns AFE0, channel 1, sample1(15..0) & sample0(15..0)
+--
+-- here is the full memory map: 
+--
+--start_AXI	    end_AXI_addr	Buffer Description
+--BASE+00000	BASE+00FFC	AFE0 channel 0
+--BASE+01000	BASE+01FFC	AFE0 channel 1
+--BASE+02000	BASE+02FFC	AFE0 channel 2
+--BASE+03000	BASE+03FFC	AFE0 channel 3
+--BASE+04000	BASE+04FFC	AFE0 channel 4
+--BASE+05000	BASE+05FFC	AFE0 channel 5
+--BASE+06000	BASE+06FFC	AFE0 channel 6
+--BASE+07000	BASE+07FFC	AFE0 channel 7
+--BASE+08000	BASE+08FFC	AFE0 channel 8
+--BASE+09000	BASE+09FFC	AFE1 channel 0
+--BASE+0A000	BASE+0AFFC	AFE1 channel 1
+--BASE+0B000	BASE+0BFFC	AFE1 channel 2
+--BASE+0C000	BASE+0CFFC	AFE1 channel 3
+--BASE+0D000	BASE+0DFFC	AFE1 channel 4
+--BASE+0E000	BASE+0EFFC	AFE1 channel 5
+--BASE+0F000	BASE+0FFFC	AFE1 channel 6
+--BASE+10000	BASE+10FFC	AFE1 channel 7
+--BASE+11000	BASE+11FFC	AFE1 channel 8
+--BASE+12000	BASE+12FFC	AFE2 channel 0
+--BASE+13000	BASE+13FFC	AFE2 channel 1
+--BASE+14000	BASE+14FFC	AFE2 channel 2
+--BASE+15000	BASE+15FFC	AFE2 channel 3
+--BASE+16000	BASE+16FFC	AFE2 channel 4
+--BASE+17000	BASE+17FFC	AFE2 channel 5
+--BASE+18000	BASE+18FFC	AFE2 channel 6
+--BASE+19000	BASE+19FFC	AFE2 channel 7
+--BASE+1A000	BASE+1AFFC	AFE2 channel 8
+--BASE+1B000	BASE+1BFFC	AFE3 channel 0
+--BASE+1C000	BASE+1CFFC	AFE3 channel 1
+--BASE+1D000	BASE+1DFFC	AFE3 channel 2
+--BASE+1E000	BASE+1EFFC	AFE3 channel 3
+--BASE+1F000	BASE+1FFFC	AFE3 channel 4
+--BASE+20000	BASE+20FFC	AFE3 channel 5
+--BASE+21000	BASE+21FFC	AFE3 channel 6
+--BASE+22000	BASE+22FFC	AFE3 channel 7
+--BASE+23000	BASE+23FFC	AFE3 channel 8
+--BASE+24000	BASE+24FFC	AFE4 channel 0
+--BASE+25000	BASE+25FFC	AFE4 channel 1
+--BASE+26000	BASE+26FFC	AFE4 channel 2
+--BASE+27000	BASE+27FFC	AFE4 channel 3
+--BASE+28000	BASE+28FFC	AFE4 channel 4
+--BASE+29000	BASE+29FFC	AFE4 channel 5
+--BASE+2A000	BASE+2AFFC	AFE4 channel 6
+--BASE+2B000	BASE+2BFFC	AFE4 channel 7
+--BASE+2C000	BASE+2CFFC	AFE4 channel 8
+--BASE+2D000	BASE+2DFFC	TimeStamp(15..0)
+--BASE+2E000	BASE+2EFFC	TimeStamp(31..16)
+--BASE+2F000	BASE+2FFFC	TimeStamp(47..32)
+--BASE+30000	BASE+30FFC	TimeStamp(63..48)
 
 -- the first AXI address of this module is at BASE + 0
--- the last AXI address of this module is at BASE + 0x61FFC
--- total memory size of this AXI-LITE slave is 401408 (0x62000) bytes
--- it uses 2(5*9+4) = 98 36kbit BlockRAMs 
+-- the last AXI address of this module is at BASE + 0x30FFC
+-- total memory size of this AXI-LITE slave is (5 AFE * 9 ch + 4 TS)*1024*4 = 200704 bytes
+-- in AXI space just reserve 256k bytes for this slave
+-- it uses (5*9+4) = 49 36kbit BlockRAMs (out of 128 available in ZU4CG "Kria")
 
 library ieee;
 use ieee.std_logic_1164.all;
@@ -121,7 +136,7 @@ architecture spybuffers_arch of spybuffers is
 
 	signal rden, wren: std_logic;
 	signal aw_en: std_logic;
-    signal addra: std_logic_vector(10 downto 0);
+    signal addra: std_logic_vector(9 downto 0);
     signal ram_dout: std_logic_vector(31 downto 0);
 
     signal reset: std_logic;
@@ -132,12 +147,12 @@ architecture spybuffers_arch of spybuffers is
 
     component spybuff is
     port(
-        clock: in std_logic; -- master clock
-        reset: in std_logic; -- active high reset async
-        trig:  in std_logic; -- trigger pulse sync to clock
-        data:  in std_logic_vector(15 downto 0); -- afe data sync to clock
-        clka:  in  std_logic; -- RAM interface is 2k x 32 and is R/W
-        addra: in  std_logic_vector(10 downto 0);
+        clock: in std_logic;
+        reset: in std_logic;
+        trig:  in std_logic;
+        data:  in std_logic_vector(15 downto 0);
+        clka:  in  std_logic;
+        addra: in  std_logic_vector(9 downto 0);
     	ena:   in  std_logic;
     	wea:   in  std_logic;
     	dina:  in  std_logic_vector(31 downto 0);
@@ -417,21 +432,21 @@ begin
     -- ...
     -- 0x60000-0x61FFC = 0110 000X XXXX XXXX XX00 
     --
-    -- SpyBuffer address is 2k (11 bits, 10..0), maps into axi address bits (12 downto 2)
+    -- SpyBuffer address is 1k (10 bits, 9..0), maps into axi address bits (11 downto 2)
 
-    addra <= axi_awaddr(12 downto 2) when (wren='1') else 
-    	     axi_araddr(12 downto 2);
+    addra <= axi_awaddr(11 downto 2) when (wren='1') else 
+    	     axi_araddr(11 downto 2);
 
     -- enable and write enable generation for AFE spybuffers, 45 blocks 0-44
     
     gen_afe_enables: for a in 4 downto 0 generate
     gen_ch_enables: for c in 8 downto 0 generate
     
-        ena(a)(c) <= '1' when ( axi_arvalid='1' and axi_araddr(18 downto 13)=std_logic_vector(to_unsigned(9*a+c,6)) ) else 
-                     '1' when ( wren='1'        and axi_awaddr(18 downto 13)=std_logic_vector(to_unsigned(9*a+c,6)) ) else 
+        ena(a)(c) <= '1' when ( axi_arvalid='1' and axi_araddr(17 downto 12)=std_logic_vector(to_unsigned(9*a+c,6)) ) else 
+                     '1' when ( wren='1'        and axi_awaddr(17 downto 12)=std_logic_vector(to_unsigned(9*a+c,6)) ) else 
                      '0';
         
-        wea(a)(c) <= '1' when ( wren='1' and axi_awaddr(18 downto 13)=std_logic_vector(to_unsigned(9*a+c,6)) ) else '0';
+        wea(a)(c) <= '1' when ( wren='1' and axi_awaddr(17 downto 12)=std_logic_vector(to_unsigned(9*a+c,6)) ) else '0';
     
     end generate gen_ch_enables;
     end generate gen_afe_enables;
@@ -440,11 +455,11 @@ begin
 
     gen_ts_enables: for t in 3 downto 0 generate
 
-        ts_ena(t) <= '1' when ( axi_arvalid='1' and axi_araddr(18 downto 13)=std_logic_vector(to_unsigned(45+t,6)) ) else 
-                     '1' when ( wren='1'        and axi_awaddr(18 downto 13)=std_logic_vector(to_unsigned(45+t,6)) ) else 
+        ts_ena(t) <= '1' when ( axi_arvalid='1' and axi_araddr(17 downto 12)=std_logic_vector(to_unsigned(45+t,6)) ) else 
+                     '1' when ( wren='1'        and axi_awaddr(17 downto 12)=std_logic_vector(to_unsigned(45+t,6)) ) else 
                      '0';
         
-        ts_wea(t) <= '1' when ( wren='1' and axi_awaddr(18 downto 13)=std_logic_vector(to_unsigned(45+t,6)) ) else '0';
+        ts_wea(t) <= '1' when ( wren='1' and axi_awaddr(17 downto 12)=std_logic_vector(to_unsigned(45+t,6)) ) else '0';
 
     end generate gen_ts_enables;
 	
@@ -453,14 +468,14 @@ begin
     gen_afe_doutmux: for a in 4 downto 0 generate
     gen_ch_doutmux: for c in 8 downto 0 generate
 
-        ram_dout <= douta(a)(c) when ( axi_araddr(18 downto 13)=std_logic_vector(to_unsigned(9*a+c,6)) ) else (others=>'Z');
+        ram_dout <= douta(a)(c) when ( axi_araddr(17 downto 12)=std_logic_vector(to_unsigned(9*a+c,6)) ) else (others=>'Z');
 
     end generate gen_ch_doutmux;
     end generate gen_afe_doutmux;
 
     gen_ts_doutmux: for t in 3 downto 0 generate
 
-        ram_dout <= ts_douta(t) when ( axi_araddr(18 downto 13)=std_logic_vector(to_unsigned(45+t,6)) ) else (others=>'Z');
+        ram_dout <= ts_douta(t) when ( axi_araddr(17 downto 12)=std_logic_vector(to_unsigned(45+t,6)) ) else (others=>'Z');
 
     end generate gen_ts_doutmux;
 
