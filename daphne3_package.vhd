@@ -22,6 +22,7 @@ package daphne3_package is
     type array_9x32_type is array (8 downto 0) of std_logic_vector(31 downto 0);
     type array_10x6_type is array (9 downto 0) of std_logic_vector(5 downto 0);
     type array_10x14_type is array (9 downto 0) of std_logic_vector(13 downto 0);
+    type array_40x64_type is array(39 downto 0) of std_logic_vector(63 downto 0);
 
     type array_4x4x6_type is array (3 downto 0) of array_4x6_type;
     type array_4x4x14_type is array (3 downto 0) of array_4x14_type;
