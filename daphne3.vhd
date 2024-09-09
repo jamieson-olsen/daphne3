@@ -381,6 +381,7 @@ port(
     mux_en          : out std_logic_vector(1 downto 0);
     mux_a           : out std_logic_vector(1 downto 0);
     stat_led        : out std_logic_vector(5 downto 0);
+    version         : in std_logic_vector(27 downto 0);
 	S_AXI_ACLK	    : in std_logic;
 	S_AXI_ARESETN	: in std_logic;
 	S_AXI_AWADDR	: in std_logic_vector(31 downto 0);
@@ -915,6 +916,7 @@ port map(
     mux_en          => mux_en,
     mux_a           => mux_a,
     stat_led        => stat_led,
+    version         => version,
     S_AXI_ACLK	    => S_AXI_ACLK,
 	S_AXI_ARESETN	=> S_AXI_ARESETN,
 	S_AXI_AWADDR	=> STUFF_AXI_AWADDR,
@@ -994,5 +996,10 @@ port map(
 
 -- TO DO: add Xilinx IP block: AXI SmartConnecct
 -- this IP block requires parameters that must be set by the TCL build script
+
+-- Jonathan recommends we make a top level graphical block with the ZYNQ_PS and 
+-- AXI SmartConnect blocks wired up. Bring the 9 AXI-Lite buses to "IO pins" on this 
+-- block diagram, THEN export the block as VHDL. Instantiate that HERE. This way we 
+-- can keep the project top level as VHDL and keep it GIT friendly.
 
 end DAPHNE3_arch;

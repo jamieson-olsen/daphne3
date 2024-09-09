@@ -30,7 +30,7 @@ generic(
     detector_id: std_logic_vector(5 downto 0) := "000010";
     version_id: std_logic_vector(5 downto 0) := "000011";
     runlength: integer := 256; -- baseline runlength must be one of: 32, 64, 128, 256
-    threshold: std_logic_vector(13 downto 0) -- trig threshold relative to calculated baseline
+    threshold: std_logic_vector(13 downto 0):= "10000000000000" -- trig threshold relative to calculated baseline
 );
 port(
     clock: in std_logic; -- master clock 62.5MHz

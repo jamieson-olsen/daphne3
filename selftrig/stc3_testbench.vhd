@@ -21,12 +21,13 @@ generic(
     crate_id: std_logic_vector(9 downto 0) := "0000000011";
     detector_id: std_logic_vector(5 downto 0) := "000010";
     version_id: std_logic_vector(5 downto 0) := "000011";
-    runlength: integer := 256 -- baseline runlength must one one of 32, 64, 128, 256
+    runlength: integer := 256; -- baseline runlength must one one of 32, 64, 128, 256
+    threshold: std_logic_vector(13 downto 0):= "10000000000000" -- trig threshold relative to calculated baseline
 );
 port(
     clock: in std_logic; -- master clock 62.5MHz
     reset: in std_logic;
-    threshold: std_logic_vector(13 downto 0); -- trig threshold relative to calculated baseline
+    
     enable: in std_logic; 
     timestamp: in std_logic_vector(63 downto 0);
 	din: in std_logic_vector(13 downto 0); -- aligned AFE data
@@ -73,7 +74,6 @@ port map(
     clock => clock,
     reset => reset,
     enable => '1',
-    threshold => "00000100000000",
     timestamp => ts,
 	din => din
 );

@@ -13,6 +13,7 @@
 -- base+16: analog mux enable lines (mux_en), 2 bits, R/W
 -- base+20: analog mux address lines (mux_a), 2 bits, R/W
 -- base+24: status LEDs, 6 bits, R/W
+-- base+28: the GIT commit number, 28 bits, R/O
 
 library ieee;
 use ieee.std_logic_1164.all;
@@ -26,6 +27,7 @@ port(
     mux_en: out std_logic_vector(1 downto 0); -- analog mux enables
     mux_a: out std_logic_vector(1 downto 0); -- analog mux selects
     stat_led: out std_logic_vector(5 downto 0); -- general purpose LEDs
+    version: in std_logic_vector(27 downto 0); -- GIT version number
   
     -- AXI-LITE interface
 
@@ -99,6 +101,7 @@ architecture stuff_arch of stuff is
     constant MUXEN_OFFSET:   std_logic_vector(4 downto 0) := "10000";
     constant MUXA_OFFSET:    std_logic_vector(4 downto 0) := "10100";
     constant LED_OFFSET:     std_logic_vector(4 downto 0) := "11000";
+    constant VER_OFFSET:     std_logic_vector(4 downto 0) := "11100";
 
 begin
 
@@ -371,6 +374,7 @@ reg_data_out <= (X"000000" & fan_speed_reg)                    when (axi_araddr(
                 (X"0000000" & "00" & mux_en_reg)               when (axi_araddr(4 downto 0)=MUXEN_OFFSET) else
                 (X"0000000" & "00" & mux_a_reg)                when (axi_araddr(4 downto 0)=MUXA_OFFSET) else
                 (X"000000" & "00" & stat_led_reg)              when (axi_araddr(4 downto 0)=LED_OFFSET) else
+                ("0000" & version)                             when (axi_araddr(4 downto 0)=VER_OFFSET) else
                 X"00000000";
 
 -- Output register or memory read data
