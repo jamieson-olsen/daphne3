@@ -11,17 +11,16 @@ use work.daphne3_package.all;
 
 entity core is
 generic( 
-    link_id: std_logic_vector(5 downto 0) := "000000";
-    slot_id: std_logic_vector(3 downto 0) := "0010";
-    crate_id: std_logic_vector(9 downto 0) := "0000000011";
-    detector_id: std_logic_vector(5 downto 0) := "000010";
-    version_id: std_logic_vector(5 downto 0) := "000011";
-    threshold: std_logic_vector(13 downto 0) := "10000000000000"; -- trig threshold relative to calculated baseline
-    runlength: integer := 256; -- baseline runlength must be one of: 32, 64, 128, 256
-    enable: std_logic_vector(39 downto 0) := X"FFFFFFFFFF"; -- self trig sender channel enables
-    ext_mac_addr_0: std_logic_vector(47 downto 0) := X"DEADBEEFCAFE"; -- default Ethernet MAC address
-    ext_ip_addr_0: std_logic_vector(31 downto 0) := X"C0A80064"; -- default Ethernet IP address 192.168.0.100
-    ext_port_addr_0: std_logic_vector(15 downto 0) := X"1234" -- default Ethernet Port number
+    link_id: std_logic_vector(5 downto 0) := DEFAULT_link_id;
+    slot_id: std_logic_vector(3 downto 0) := DEFAULT_slot_id;
+    crate_id: std_logic_vector(9 downto 0) := DEFAULT_crate_id;
+    detector_id: std_logic_vector(5 downto 0) := DEFAULT_detector_id;
+    version_id: std_logic_vector(5 downto 0) := DEFAULT_version_id;
+    threshold: std_logic_vector(13 downto 0) := DEFAULT_threshold;
+    runlength: integer := DEFAULT_runlength;
+    ext_mac_addr_0: std_logic_vector(47 downto 0) := DEFAULT_ext_mac_addr_0; -- default Ethernet MAC address
+    ext_ip_addr_0: std_logic_vector(31 downto 0) := DEFAULT_ext_ip_addr_0; -- default Ethernet IP address 192.168.0.100
+    ext_port_addr_0: std_logic_vector(15 downto 0) := DEFAULT_ext_port_addr_0 -- default Ethernet Port number
 );
 port(
 
@@ -29,6 +28,7 @@ port(
     reset: in std_logic; -- sync to clock
     timestamp: in std_logic_vector(63 downto 0); -- timestamp sync to clock
     din: in array_5x8x14_type; -- AFE data from frontend sync to clock
+    chan_enable: in std_logic_vector(39 downto 0); -- self trig sender channel enables
 
     -- 10G Ethernet sender AXI-Lite interface
 
@@ -319,7 +319,7 @@ gena_stc3: for a in 4 downto 0 generate -- 5 AFE chips
         port map(
             clock => clock,
             reset => reset,
-            enable => enable(8*a+c), -- for now, point up to generic
+            enable => chan_enable(8*a+c), -- for now, point up to generic
             timestamp => timestamp,
         	din => din(a)(c),
             dout => dout(8*a+c),

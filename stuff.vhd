@@ -14,10 +14,22 @@
 -- base+20: analog mux address lines (mux_a), 2 bits, R/W
 -- base+24: status LEDs, 6 bits, R/W
 -- base+28: the GIT commit number, 28 bits, R/O
+-- base+32: self triggered mode channel enable ch31..ch00 (31..0) R/W 
+-- base+36: self triggered mode channel enable ch39..ch32 (7..0) R/W 
+
+-- *** TO DO:
+-- base+32: link_id(5..0) R/W 
+-- base+36: slot_id(3..0) R/W 
+-- base+40: crate_id(9..0) R/W 
+-- base+44: detector_id(5..0) R/W 
+-- base+48: version_id(5..0) R/W 
+-- base+52: threshold(13..0) R/W 
 
 library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
+
+use work.daphne3_package.all;
 
 entity stuff is
 port(
@@ -28,6 +40,7 @@ port(
     mux_a: out std_logic_vector(1 downto 0); -- analog mux selects
     stat_led: out std_logic_vector(5 downto 0); -- general purpose LEDs
     version: in std_logic_vector(27 downto 0); -- GIT version number
+    core_chan_enable: out std_logic_vector(39 downto 0); -- channel enables for self-trig core
   
     -- AXI-LITE interface
 
@@ -91,17 +104,20 @@ architecture stuff_arch of stuff is
     signal stat_led_reg: std_logic_vector(5 downto 0) := "000000";
     signal hvbias_en_reg: std_logic := '0';
     signal mux_a_reg, mux_en_reg: std_logic_vector(1 downto 0) := "00";
+    signal core_enable_reg: std_logic_vector(39 downto 0) := DEFAULT_core_enable;
 
     -- register offsets are relative to the base address specified for this AXI-LITE slave instance
 
-    constant FANCTRL_OFFSET: std_logic_vector(4 downto 0) := "00000";
-    constant FAN0SPD_OFFSET: std_logic_vector(4 downto 0) := "00100";
-    constant FAN1SPD_OFFSET: std_logic_vector(4 downto 0) := "01000";
-    constant HVBIAS_OFFSET:  std_logic_vector(4 downto 0) := "01100";
-    constant MUXEN_OFFSET:   std_logic_vector(4 downto 0) := "10000";
-    constant MUXA_OFFSET:    std_logic_vector(4 downto 0) := "10100";
-    constant LED_OFFSET:     std_logic_vector(4 downto 0) := "11000";
-    constant VER_OFFSET:     std_logic_vector(4 downto 0) := "11100";
+    constant FANCTRL_OFFSET:    std_logic_vector(5 downto 0) := "000000"; -- base+0
+    constant FAN0SPD_OFFSET:    std_logic_vector(5 downto 0) := "000100"; -- base+4
+    constant FAN1SPD_OFFSET:    std_logic_vector(5 downto 0) := "001000"; -- base+8
+    constant HVBIAS_OFFSET:     std_logic_vector(5 downto 0) := "001100"; -- base+12
+    constant MUXEN_OFFSET:      std_logic_vector(5 downto 0) := "010000"; -- base+16
+    constant MUXA_OFFSET:       std_logic_vector(5 downto 0) := "010100"; -- base+20
+    constant LED_OFFSET:        std_logic_vector(5 downto 0) := "011000"; -- base+24
+    constant VER_OFFSET:        std_logic_vector(5 downto 0) := "011100"; -- base+28
+    constant CORE_EN_LO_OFFSET: std_logic_vector(5 downto 0) := "100000"; -- base+32
+    constant CORE_EN_HI_OFFSET: std_logic_vector(5 downto 0) := "100100"; -- base+36
 
 begin
 
@@ -251,13 +267,14 @@ begin
         mux_en_reg <= "00";
         mux_a_reg <= "00";
         stat_led_reg <= "000000";
+        core_enable_reg <= DEFAULT_core_enable;
     else
       if (reg_wren = '1' and S_AXI_WSTRB = "1111") then
 
         -- treat all of these register writes as if they are full 32 bits
         -- e.g. the four write strobe bits should be high
 
-        case ( axi_awaddr(4 downto 0) ) is
+        case ( axi_awaddr(5 downto 0) ) is
 
           when FANCTRL_OFFSET => 
             fan_speed_reg <= S_AXI_WDATA(7 downto 0);
@@ -273,6 +290,12 @@ begin
 
           when LED_OFFSET => 
             stat_led_reg <= S_AXI_WDATA(5 downto 0);
+
+          when CORE_EN_LO_OFFSET => 
+            core_enable_reg(31 downto 0) <= S_AXI_WDATA(31 downto 0);
+
+          when CORE_EN_HI_OFFSET => 
+            core_enable_reg(39 downto 32) <= S_AXI_WDATA(7 downto 0);
 
           when others =>
             null;
@@ -364,17 +387,20 @@ end process;
 -- Implement memory mapped register select and read logic generation
 -- Slave register read enable is asserted when valid address is available
 -- and the slave is ready to accept the read address.
+-- reg_data_out is 32 bits
 
 reg_rden <= axi_arready and S_AXI_ARVALID and (not axi_rvalid) ;
 
-reg_data_out <= (X"000000" & fan_speed_reg)                    when (axi_araddr(4 downto 0)=FANCTRL_OFFSET) else
-                (X"00000" & fan0_rpm)                          when (axi_araddr(4 downto 0)=FAN0SPD_OFFSET) else
-                (X"00000" & fan1_rpm)                          when (axi_araddr(4 downto 0)=FAN1SPD_OFFSET) else
-                (X"0000000" & "000" & hvbias_en_reg)           when (axi_araddr(4 downto 0)=HVBIAS_OFFSET) else
-                (X"0000000" & "00" & mux_en_reg)               when (axi_araddr(4 downto 0)=MUXEN_OFFSET) else
-                (X"0000000" & "00" & mux_a_reg)                when (axi_araddr(4 downto 0)=MUXA_OFFSET) else
-                (X"000000" & "00" & stat_led_reg)              when (axi_araddr(4 downto 0)=LED_OFFSET) else
-                ("0000" & version)                             when (axi_araddr(4 downto 0)=VER_OFFSET) else
+reg_data_out <= (X"000000" & fan_speed_reg)                    when (axi_araddr(5 downto 0)=FANCTRL_OFFSET) else
+                (X"00000" & fan0_rpm)                          when (axi_araddr(5 downto 0)=FAN0SPD_OFFSET) else
+                (X"00000" & fan1_rpm)                          when (axi_araddr(5 downto 0)=FAN1SPD_OFFSET) else
+                (X"0000000" & "000" & hvbias_en_reg)           when (axi_araddr(5 downto 0)=HVBIAS_OFFSET) else
+                (X"0000000" & "00" & mux_en_reg)               when (axi_araddr(5 downto 0)=MUXEN_OFFSET) else
+                (X"0000000" & "00" & mux_a_reg)                when (axi_araddr(5 downto 0)=MUXA_OFFSET) else
+                (X"000000" & "00" & stat_led_reg)              when (axi_araddr(5 downto 0)=LED_OFFSET) else
+                ("0000" & version)                             when (axi_araddr(5 downto 0)=VER_OFFSET) else
+                core_enable_reg(31 downto 0)                   when (axi_araddr(5 downto 0)=CORE_EN_LO_OFFSET) else
+                (X"000000" & core_enable_reg(39 downto 32))    when (axi_araddr(5 downto 0)=CORE_EN_HI_OFFSET) else
                 X"00000000";
 
 -- Output register or memory read data
@@ -402,5 +428,6 @@ mux_a <= mux_a_reg;
 mux_en <= mux_en_reg;
 hvbias_en <= hvbias_en_reg;
 stat_led <= stat_led_reg; -- PL general board LEDs active high
+core_chan_enable <= core_enable_reg;
 
 end stuff_arch;

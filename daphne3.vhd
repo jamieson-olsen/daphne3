@@ -382,6 +382,7 @@ port(
     mux_a           : out std_logic_vector(1 downto 0);
     stat_led        : out std_logic_vector(5 downto 0);
     version         : in std_logic_vector(27 downto 0);
+    core_chan_enable: out std_logic_vector(39 downto 0);
 	S_AXI_ACLK	    : in std_logic;
 	S_AXI_ARESETN	: in std_logic;
 	S_AXI_AWADDR	: in std_logic_vector(31 downto 0);
@@ -417,7 +418,6 @@ generic(
     version_id: std_logic_vector(5 downto 0) := "000011";
     threshold: std_logic_vector(13 downto 0) := "10000000000000";
     runlength: integer := 256;
-    enable: std_logic_vector(39 downto 0) := X"FFFFFFFFFF";
     ext_mac_addr_0: std_logic_vector(47 downto 0) := X"DEADBEEFCAFE";
     ext_ip_addr_0: std_logic_vector(31 downto 0) := X"C0A80064";
     ext_port_addr_0: std_logic_vector(15 downto 0) := X"1234"
@@ -427,6 +427,7 @@ port(
     reset: in std_logic;
     timestamp: in std_logic_vector(63 downto 0);
     din: in array_5x8x14_type;
+    chan_enable: std_logic_vector(39 downto 0);
     S_AXI_ACLK: in std_logic;
     S_AXI_ARESETN: in std_logic;
     S_AXI_AWADDR: in std_logic_vector(31 downto 0);
@@ -464,6 +465,7 @@ signal din_array: array_5x8x14_type;
 signal trig: std_logic;
 signal timestamp: std_logic_vector(63 downto 0);
 signal clock, clk125, clk500: std_logic;
+signal core_chan_enable: std_logic_vector(39 downto 0);
 
 signal S_AXI_ACLK:    std_logic;
 signal S_AXI_ARESETN: std_logic;
@@ -917,6 +919,7 @@ port map(
     mux_a           => mux_a,
     stat_led        => stat_led,
     version         => version,
+    core_chan_enable => core_chan_enable,
     S_AXI_ACLK	    => S_AXI_ACLK,
 	S_AXI_ARESETN	=> S_AXI_ARESETN,
 	S_AXI_AWADDR	=> STUFF_AXI_AWADDR,
@@ -959,6 +962,7 @@ port map(
     reset => '0',
     timestamp => timestamp,
     din => din_array,
+    chan_enable => core_chan_enable,
 
     S_AXI_ACLK	    => S_AXI_ACLK,
 	S_AXI_ARESETN	=> S_AXI_ARESETN,
