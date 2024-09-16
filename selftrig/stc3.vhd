@@ -35,7 +35,8 @@ generic(
 port(
     clock: in std_logic; -- master clock 62.5MHz
     reset: in std_logic;
-    enable: in std_logic; 
+    enable: in std_logic;
+    forcetrig: in std_logic; -- force a trigger
     timestamp: in std_logic_vector(63 downto 0);
 	din: in std_logic_vector(13 downto 0); -- aligned AFE data
     dout: out std_logic_vector(63 downto 0);
@@ -58,7 +59,7 @@ signal state: state_type;
 
 signal sample0_timestamp: std_logic_vector(63 downto 0) := (others=>'0');
 signal bline, trigsample: std_logic_vector(13 downto 0) := (others=>'0');
-signal triggered: std_logic := '0';
+signal triggered, forcetrig_reg: std_logic := '0';
 
 signal DIN_A, DOUT_B: std_logic_vector(71 downto 0) := (others=>'0');
 signal EN_A, EN_B, SLEEP: std_logic := '0';
@@ -165,6 +166,15 @@ port map(
     bline => bline
 );
 
+-- trig may be an async signal, clean it up here
+
+trig_proc: process(clock)
+begin
+    if rising_edge(clock) then
+        forcetrig_reg <= forcetrig;
+    end if;
+end process trig_proc;     
+
 -- for dense data packing 14 bit samples into 64 bit words,
 -- we need to access up to last 6 samples at once...
 
@@ -214,7 +224,7 @@ begin
                 when rst =>
                     state <= wait4trig;
                 when wait4trig => 
-                    if (triggered='1' and enable='1') then -- start packing
+                    if ((triggered='1' or forcetrig_reg='1') and enable='1') then -- start packing
                         block_count <= 0;
                         sample0_timestamp <= std_logic_vector( unsigned(timestamp) - 189 ); 
                         state <= w0; 

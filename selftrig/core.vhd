@@ -29,6 +29,7 @@ port(
     timestamp: in std_logic_vector(63 downto 0); -- timestamp sync to clock
     din: in array_5x8x14_type; -- AFE data from frontend sync to clock
     chan_enable: in std_logic_vector(39 downto 0); -- self trig sender channel enables
+    forcetrig: in std_logic; -- momentary pulse to force all enabled senders to trigger
 
     -- 10G Ethernet sender AXI-Lite interface
 
@@ -87,6 +88,7 @@ port(
     clock: in std_logic; -- master clock 62.5MHz
     reset: in std_logic;
     enable: in std_logic; 
+    forcetrig: in std_logic;
     timestamp: in std_logic_vector(63 downto 0);
 	din: in std_logic_vector(13 downto 0); -- aligned AFE data
     dout: out std_logic_vector(63 downto 0);
@@ -320,6 +322,7 @@ gena_stc3: for a in 4 downto 0 generate -- 5 AFE chips
             clock => clock,
             reset => reset,
             enable => chan_enable(8*a+c), -- for now, point up to generic
+            forcetrig => forcetrig,
             timestamp => timestamp,
         	din => din(a)(c),
             dout => dout(8*a+c),
