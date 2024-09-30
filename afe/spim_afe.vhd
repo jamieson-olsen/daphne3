@@ -155,22 +155,27 @@ signal afe_dout: array_5x24_type;
 signal busy0, busy12, busy34: std_logic;
 signal afe_rst_reg, afe_pd_reg: std_logic := '0';
 
-constant CTRLSTAT_OFFSET: std_logic_vector(5 downto 0) := "000000";
-constant AFE0_OFFSET:     std_logic_vector(5 downto 0) := "000100";
-constant OFFS0_OFFSET:    std_logic_vector(5 downto 0) := "001000";
-constant TRIM0_OFFSET:    std_logic_vector(5 downto 0) := "001100";
-constant AFE1_OFFSET:     std_logic_vector(5 downto 0) := "010000";
-constant OFFS1_OFFSET:    std_logic_vector(5 downto 0) := "010100";
-constant TRIM1_OFFSET:    std_logic_vector(5 downto 0) := "011000";
-constant AFE2_OFFSET:     std_logic_vector(5 downto 0) := "011100";
-constant OFFS2_OFFSET:    std_logic_vector(5 downto 0) := "100000";
-constant TRIM2_OFFSET:    std_logic_vector(5 downto 0) := "100100";
-constant AFE3_OFFSET:     std_logic_vector(5 downto 0) := "101000";
-constant OFFS3_OFFSET:    std_logic_vector(5 downto 0) := "101100";
-constant TRIM3_OFFSET:    std_logic_vector(5 downto 0) := "110000";
-constant AFE4_OFFSET:     std_logic_vector(5 downto 0) := "110100";
-constant OFFS4_OFFSET:    std_logic_vector(5 downto 0) := "111000";
-constant TRIM4_OFFSET:    std_logic_vector(5 downto 0) := "111100";
+constant CTRLSTAT_OFFSET: std_logic_vector(5 downto 0) := "000000"; -- base + 0
+
+constant AFE0_OFFSET:     std_logic_vector(5 downto 0) := std_logic_vector( to_unsigned( 4,6) ); -- base + 4
+constant TRIM0_OFFSET:    std_logic_vector(5 downto 0) := std_logic_vector( to_unsigned( 8,6) ); -- base + 12
+constant OFFS0_OFFSET:    std_logic_vector(5 downto 0) := std_logic_vector( to_unsigned(12,6) ); -- base + 8
+
+constant AFE1_OFFSET:     std_logic_vector(5 downto 0) := std_logic_vector( to_unsigned(16,6) );
+constant TRIM1_OFFSET:    std_logic_vector(5 downto 0) := std_logic_vector( to_unsigned(20,6) );
+constant OFFS1_OFFSET:    std_logic_vector(5 downto 0) := std_logic_vector( to_unsigned(24,6) );
+
+constant AFE2_OFFSET:     std_logic_vector(5 downto 0) := std_logic_vector( to_unsigned(28,6) );
+constant TRIM2_OFFSET:    std_logic_vector(5 downto 0) := std_logic_vector( to_unsigned(32,6) );
+constant OFFS2_OFFSET:    std_logic_vector(5 downto 0) := std_logic_vector( to_unsigned(36,6) );
+
+constant AFE3_OFFSET:     std_logic_vector(5 downto 0) := std_logic_vector( to_unsigned(40,6) );
+constant TRIM3_OFFSET:    std_logic_vector(5 downto 0) := std_logic_vector( to_unsigned(44,6) );
+constant OFFS3_OFFSET:    std_logic_vector(5 downto 0) := std_logic_vector( to_unsigned(48,6) );
+
+constant AFE4_OFFSET:     std_logic_vector(5 downto 0) := std_logic_vector( to_unsigned(52,6) );
+constant TRIM4_OFFSET:    std_logic_vector(5 downto 0) := std_logic_vector( to_unsigned(56,6) );
+constant OFFS4_OFFSET:    std_logic_vector(5 downto 0) := std_logic_vector( to_unsigned(60,6) );
 
 begin
 

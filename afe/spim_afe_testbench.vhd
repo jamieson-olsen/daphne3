@@ -482,13 +482,63 @@ wait for 500ns;
 axipoke(addr => X"00000000", data => X"00000000"); -- release hard reset all AFEs
 
 wait for 500ns;
+
+-- -------------------------------------------------------------
+
 axipoke(addr => X"00000004", data => X"008000FF"); -- write 24 bits to AFE0 SPI interface (busy for ~3us)
-
 wait for 3us;
-axipoke(addr => X"00000008", data => X"DEADBEEF"); -- write trim0 dacs (busy for ~4us)
 
+axipoke(addr => X"00000008", data => X"7DAC0001"); -- write trim0 dacs (busy for ~4us)
 wait for 4us;
+
 axipoke(addr => X"0000000C", data => X"0FF5E770"); -- write offset0 dacs (busy for ~4us)
+wait for 4us;
+
+-- -------------------------------------------------------------
+
+axipoke(addr => X"00000010", data => X"008111FF"); -- write 24 bits to AFE1 SPI interface (busy for ~3us)
+wait for 3us;
+
+axipoke(addr => X"00000014", data => X"7DAC0002"); -- write trim1 dacs (busy for ~4us)
+wait for 4us;
+
+axipoke(addr => X"00000018", data => X"0FF5E771"); -- write offset1 dacs (busy for ~4us)
+wait for 4us;
+
+-- -------------------------------------------------------------
+
+axipoke(addr => X"0000001C", data => X"008222FF"); -- write 24 bits to AFE2 SPI interface (busy for ~3us)
+wait for 3us;
+
+axipoke(addr => X"00000020", data => X"7DAC0002"); -- write trim2 dacs (busy for ~4us)
+wait for 4us;
+
+axipoke(addr => X"00000024", data => X"0FF5E772"); -- write offset2 dacs (busy for ~4us)
+wait for 4us;
+
+-- -------------------------------------------------------------
+
+axipoke(addr => X"00000028", data => X"008333FF"); -- write 24 bits to AFE3 SPI interface (busy for ~3us)
+wait for 3us;
+
+axipoke(addr => X"0000002C", data => X"7DAC0003"); -- write trim3 dacs (busy for ~4us)
+wait for 4us;
+
+axipoke(addr => X"00000030", data => X"0FF5E773"); -- write offset3 dacs (busy for ~4us)
+wait for 4us;
+
+-- -------------------------------------------------------------
+
+axipoke(addr => X"00000034", data => X"008444FF"); -- write 24 bits to AFE4 SPI interface (busy for ~3us)
+wait for 3us;
+
+axipoke(addr => X"00000038", data => X"7DAC0004"); -- write trim4 dacs (busy for ~4us)
+wait for 4us;
+
+axipoke(addr => X"0000003C", data => X"0FF5E774"); -- write offset4 dacs (busy for ~4us)
+wait for 4us;
+
+-- -------------------------------------------------------------
 
 wait;
 end process aximaster_proc;
