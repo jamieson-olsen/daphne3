@@ -29,6 +29,7 @@ port(
     reset: in std_logic;
     
     enable: in std_logic; 
+    forcetrig: in std_logic;
     timestamp: in std_logic_vector(63 downto 0);
 	din: in std_logic_vector(13 downto 0); -- aligned AFE data
     dout: out std_logic_vector(63 downto 0);
@@ -38,7 +39,7 @@ port(
 end component;
 
 signal reset: std_logic := '1';
-signal clock: std_logic := '0';
+signal clock, forcetrig: std_logic := '0';
 signal ts: std_logic_vector(63 downto 0) := X"0000000000000000";
 signal din: std_logic_vector(13 downto 0) := "00000001000000";
 
@@ -48,7 +49,7 @@ clock <= not clock after 8.000 ns; --  62.500 MHz
 reset <= '1', '0' after 96ns;
 
 transactor: process(clock)
-    file test_vector: text open read_mode is "$dsn/src/sender/stc3_testbench.txt";
+    file test_vector: text open read_mode is "$dsn/src/selftrig/stc3_testbench.txt";
     variable row: line;
     variable v_ts: integer := 0;
     variable v_din: integer := 0;
@@ -68,12 +69,27 @@ begin
     end if;    
 end process transactor;
 
+
+forcetrigproc: process
+begin
+    wait for 30us;
+    wait until rising_edge(clock);
+    forcetrig <= '1';
+    wait until rising_edge(clock);
+    forcetrig <= '0';
+    wait;
+end process forcetrigproc;
+
+
+
+
 DUT: stc3
 generic map( runlength => 64 )
 port map(
     clock => clock,
     reset => reset,
     enable => '1',
+    forcetrig => forcetrig,
     timestamp => ts,
 	din => din
 );
