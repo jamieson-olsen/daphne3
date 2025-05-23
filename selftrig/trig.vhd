@@ -3,9 +3,9 @@
 --
 -- baseline, threshold, din are UNSIGNED 
 --
--- In this EXAMPLE the trigger algorithm is very simple and requires only a few clock cycles
--- however, this module adds extra pipeline stages so that the overall latency 
--- is 128 clocks. this is done to allow for more advanced triggers.
+-- In this EXAMPLE the trigger algorithm is VERY simple and requires only a few clock cycles
+-- however, this module ADDS extra pipeline stages so that the overall latency 
+-- is 256 clocks. this is done to allow for more advanced triggers.
 --
 -- If a more advanced trigger is used in place of this module, the overall latency MUST
 -- match this module, since the rest of the self-triggered sender logic depends on it.
@@ -21,18 +21,23 @@ entity trig is
 port(
     clock: in std_logic;
     din: in std_logic_vector(13 downto 0);        -- raw AFE data aligned to clock
+    ts: in std_logic_vector(63 downto 0); -- timestamp
     threshold: in std_logic_vector(13 downto 0);  -- trigger threshold relative to baseline
     baseline: in std_logic_vector(13 downto 0);   -- average signal level computed over past N samples
-    triggered: out std_logic;
-    trigsample: out std_logic_vector(13 downto 0) -- the sample that caused the trigger
+    trig: out std_logic; -- trigger pulse (after latency delay)
+    trig_sample: out std_logic_vector(13 downto 0); -- the sample that caused the trigger
+    trig_ts: out std_logic_vector(63 downto 0) -- the timestamp of the trigger pulse
 );
 end trig;
 
 architecture trig_arch of trig is
 
     signal din0, din1, din2: std_logic_vector(13 downto 0) := "00000000000000";
-    signal trig_thresh, trigsample_reg: std_logic_vector(13 downto 0) := (others=>'0');
-    signal triggered_i, triggered_dly32_i, triggered_dly64_i, triggered_dly96_i: std_logic := '0';
+    signal trig_thresh, trig_sample_reg: std_logic_vector(13 downto 0) := (others=>'0');
+    signal ts_reg, trig_ts_reg: std_logic_vector(63 downto 0) := (others=>'0');
+    signal triggered_i: std_logic := '0';
+    signal triggered_dly32_i, triggered_dly64_i, triggered_dly96_i, triggered_dly128_i: std_logic := '0';
+    signal triggered_dly160_i, triggered_dly192_i, triggered_dly224_i: std_logic := '0';
 
 begin
 
@@ -42,6 +47,7 @@ begin
             din0 <= din;  -- latest sample
             din1 <= din0; -- previous sample
             din2 <= din1; -- previous previous sample
+            ts_reg <= ts;
         end if;
     end process trig_pipeline_proc;
 
@@ -56,7 +62,7 @@ begin
 
     triggered_i <= '1' when ( din2>trig_thresh and din1<trig_thresh and din0<trig_thresh ) else '0';
 
-    -- add in some fake/synthetic latency, adjust it so total trigger latency is 128 clocks
+    -- add in some fake/synthetic latency, adjust it so total trigger latency is 256 clocks
 
     srlc32e_0_inst : srlc32e
     port map(
@@ -92,23 +98,65 @@ begin
     port map(
         clk => clock,
         ce  => '1',
-        a   => "11011",  -- fine tune this delay to make overall latency = 128
+        a   => "11111",
         d   => triggered_dly96_i,
-        q   => triggered,
+        q   => triggered_dly128_i,
         q31 => open
     );
 
-    -- capture the sample that caused the trigger 
+    srlc32e_4_inst : srlc32e
+    port map(
+        clk => clock,
+        ce  => '1',
+        a   => "11111",
+        d   => triggered_dly128_i,
+        q   => triggered_dly160_i,
+        q31 => open
+    );
+
+    srlc32e_5_inst : srlc32e
+    port map(
+        clk => clock,
+        ce  => '1',
+        a   => "11111",
+        d   => triggered_dly160_i,
+        q   => triggered_dly192_i,
+        q31 => open
+    );
+
+    srlc32e_6_inst : srlc32e
+    port map(
+        clk => clock,
+        ce  => '1',
+        a   => "11111",
+        d   => triggered_dly192_i,
+        q   => triggered_dly224_i,
+        q31 => open
+    );
+
+    srlc32e_7_inst : srlc32e
+    port map(
+        clk => clock,
+        ce  => '1',
+        a   => "11111", -- may need to fine tune this delay here
+        d   => triggered_dly224_i,
+        q   => trig,
+        q31 => open
+    );
+
+    -- capture the sample and timestamp that caused the trigger 
 
     samplecap_proc: process(clock)
     begin
         if rising_edge(clock) then
             if (triggered_i='1') then
-                trigsample_reg <= din0;
+                trig_sample_reg <= din0;
+                trig_ts_reg     <= ts_reg;
             end if;
         end if;    
     end process samplecap_proc;
 
-    trigsample <= trigsample_reg;
+    trig_sample <= trig_sample_reg;
+    trig_ts     <= trig_ts_reg;
 
 end trig_arch;

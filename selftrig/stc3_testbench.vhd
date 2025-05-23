@@ -22,7 +22,7 @@ generic(
     detector_id: std_logic_vector(5 downto 0) := "000010";
     version_id: std_logic_vector(5 downto 0) := "000011";
     runlength: integer := 256; -- baseline runlength must one one of 32, 64, 128, 256
-    threshold: std_logic_vector(13 downto 0):= "10000000000000" -- trig threshold relative to calculated baseline
+    threshold: std_logic_vector(13 downto 0):= "00001111101000" -- trig threshold relative to calculated baseline
 );
 port(
     clock: in std_logic; -- master clock 62.5MHz
@@ -32,9 +32,10 @@ port(
     forcetrig: in std_logic;
     timestamp: in std_logic_vector(63 downto 0);
 	din: in std_logic_vector(13 downto 0); -- aligned AFE data
-    dout: out std_logic_vector(63 downto 0);
-    valid: out std_logic;
-    last: out std_logic
+
+    FIFO_rd_en: in std_logic; -- read enable
+    FIFO_dout:  out std_logic_vector(71 downto 0);
+    FIFO_empty: out std_logic
 );
 end component;
 
@@ -69,7 +70,6 @@ begin
     end if;    
 end process transactor;
 
-
 forcetrigproc: process
 begin
     wait for 30us;
@@ -80,18 +80,16 @@ begin
     wait;
 end process forcetrigproc;
 
-
-
-
 DUT: stc3
-generic map( runlength => 64 )
+generic map( runlength => 64 ) 
 port map(
     clock => clock,
     reset => reset,
     enable => '1',
-    forcetrig => forcetrig,
+    forcetrig => '0',
     timestamp => ts,
-	din => din
+	din => din,
+    FIFO_rd_en => '0'
 );
 
 end stc3_testbench_arch;
