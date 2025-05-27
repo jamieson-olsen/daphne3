@@ -25,24 +25,22 @@ library xpm;
 use xpm.vcomponents.all;
 
 entity stc3 is
-generic( 
-    link_id: std_logic_vector(5 downto 0) := "000000"; 
-    ch_id: std_logic_vector(5 downto 0) := "000000";
-    slot_id: std_logic_vector(3 downto 0) := "0010";
-    crate_id: std_logic_vector(9 downto 0) := "0000000011";
-    detector_id: std_logic_vector(5 downto 0) := "000010";
-    version_id: std_logic_vector(5 downto 0) := "000011";
-    runlength: integer := 256; -- baseline runlength must be one of: 32, 64, 128, 256
-    threshold: std_logic_vector(13 downto 0):= "00001111101000" -- trig threshold relative to calculated baseline
-);
+generic( baseline_runlength: integer := 256 ); -- options 32, 64, 128, or 256
 port(
+    link_id: std_logic_vector(5 downto 0);
+    ch_id: std_logic_vector(5 downto 0);
+    slot_id: std_logic_vector(3 downto 0);
+    crate_id: std_logic_vector(9 downto 0);
+    detector_id: std_logic_vector(5 downto 0);
+    version_id: std_logic_vector(5 downto 0);
+    threshold: std_logic_vector(9 downto 0); -- counts below calculated avg baseline
+
     clock: in std_logic; -- master clock 62.5MHz
     reset: in std_logic;
     enable: in std_logic;
     forcetrig: in std_logic; -- force a trigger
     timestamp: in std_logic_vector(63 downto 0);
 	din: in std_logic_vector(13 downto 0); -- aligned AFE data
-
     FIFO_rd_en: in std_logic; -- output FIFO read enable
     FIFO_dout: out std_logic_vector(71 downto 0); -- output FIFO data
     FIFO_empty: out std_logic -- output FIFO flag
@@ -63,13 +61,13 @@ type state_type is (rst, wait4trig, w0, w1, w2, w3, h0, h1, h2, h3, h4, h5, h6, 
 signal state: state_type;
 
 signal trig_sample_ts, sample0_ts: std_logic_vector(63 downto 0) := (others=>'0');
-signal bline, trig_sample: std_logic_vector(13 downto 0) := (others=>'0');
+signal calculated_baseline, trig_sample_dat: std_logic_vector(13 downto 0) := (others=>'0');
 signal triggered, forcetrig_reg: std_logic := '0';
 signal FIFO_din: std_logic_vector(71 downto 0) := (others=>'0');
 signal FIFO_wr_en, FIFO_sleep: std_logic := '0';
 
 component baseline
-generic( runlength: integer := 256 );
+generic( baseline_runlength: integer := 256 );
 port(
     clock: in std_logic;
     reset: in std_logic;
@@ -83,10 +81,10 @@ port(
     din: in std_logic_vector(13 downto 0);
     ts: in std_logic_vector(63 downto 0);
     baseline: in std_logic_vector(13 downto 0);
-    threshold: in std_logic_vector(13 downto 0);
+    threshold: in std_logic_vector(9 downto 0);
     trig: out std_logic;
-    trig_sample: out std_logic_vector(13 downto 0);
-    trig_ts: out std_logic_vector(63 downto 0)
+    trig_sample_dat: out std_logic_vector(13 downto 0);
+    trig_sample_ts: out std_logic_vector(63 downto 0)
 );
 end component;
 
@@ -140,12 +138,12 @@ end generate gen_delay2_bit;
 -- now compute the average signal baseline level over the last N samples
 
 baseline_inst: baseline
-generic map ( runlength => runlength ) -- must be 32, 64, 128, or 256
+generic map ( baseline_runlength => baseline_runlength ) -- must be 32, 64, 128, or 256
 port map(
     clock => clock,
     reset => reset,
     din => din_delay(0), -- this looks at LIVE AFE data, not the delayed data
-    bline => bline
+    bline => calculated_baseline
 );
 
 -- trig may be an async signal, clean it up here
@@ -177,11 +175,11 @@ port map(
      clock => clock,
      din => din_delay(0), -- watching live AFE data
      ts => timestamp,
-     baseline => bline,
+     baseline => calculated_baseline,
      threshold => threshold,
      trig => triggered,
-     trig_sample => trig_sample, 
-     trig_ts => trig_sample_ts 
+     trig_sample_dat => trig_sample_dat, 
+     trig_sample_ts => trig_sample_ts 
 );        
 
 -- big FSM waits for trigger condition then dense pack assembly of the output frame 
@@ -290,7 +288,7 @@ sample0_ts <= std_logic_vector( unsigned(trig_sample_ts) - 64 );
 
 FIFO_din <= X"FF00000000" & link_id & slot_id & crate_id & detector_id & version_id when (state=h0) else
             X"00" & sample0_ts when (state=h1) else -- timestamp of sample0 (NOT the trigger sample!)
-            X"00" & "0000000000" & ch_id & "00" & bline & "00" & threshold & "00" & trig_sample when (state=h2) else
+            X"00" & ("0000000000" & ch_id) & ("00" & calculated_baseline) & ("000000" & threshold) & ("00" & trig_sample_dat) when (state=h2) else
             -- reserved for header 3 (all zeros)
             -- reserved for header 4 (all zeros)
             -- reserved for header 5 (all zeros)
@@ -333,54 +331,55 @@ FIFO_sleep <= '1' when (state=rst) else
 -- UltraRAM sync FIFO macro
 -- 4k words deep x 72 bits wide (this is enough to hold 17 hits!)
 -- first word fall through (FWFT)
+-- this requires SystemVerilog assertions module
 
---xpm_fifo_sync_inst : xpm_fifo_sync
---generic map (
---   CASCADE_HEIGHT => 0,
---   DOUT_RESET_VALUE => "0",
---   ECC_MODE => "no_ecc",
---   EN_SIM_ASSERT_ERR => "warning",
---   FIFO_MEMORY_TYPE => "ultra",
---   FIFO_READ_LATENCY => 0,  FWFT
---   FIFO_WRITE_DEPTH => 4096,
---   FULL_RESET_VALUE => 0,
---   PROG_EMPTY_THRESH => 10,
---   PROG_FULL_THRESH => 10,
---   RD_DATA_COUNT_WIDTH => 1,
---   READ_DATA_WIDTH => 72,
---   READ_MODE => "fwft",
---   SIM_ASSERT_CHK => 0,
---   USE_ADV_FEATURES => "0707",
---   WAKEUP_TIME => 2,  use sleep pin
---   WRITE_DATA_WIDTH => 72,
---   WR_DATA_COUNT_WIDTH => 1
---)
---port map (
---   almost_empty => open,
---   almost_full => open,
---   data_valid => open,
---   dbiterr => open,
---   dout => FIFO_dout,
---   empty => FIFO_empty,
---   full => open,
---   overflow => open,
---   prog_empty => open,
---   prog_full => open,
---   rd_data_count => open,
---   rd_rst_busy => open,
---   sbiterr => open,
---   underflow => open,
---   wr_ack => open,
---   wr_data_count => open, 
---   wr_rst_busy => open,
---   din => FIFO_din,
---   injectdbiterr => '0',
---   injectsbiterr => '0',
---   rd_en => FIFO_rd_en,
---   rst => reset,
---   sleep => FIFO_sleep,
---   wr_clk => clock,
---   wr_en => FIFO_wr_en
---);
+xpm_fifo_sync_inst : xpm_fifo_sync
+generic map (
+   CASCADE_HEIGHT => 0,
+   DOUT_RESET_VALUE => "0",
+   ECC_MODE => "no_ecc",
+   EN_SIM_ASSERT_ERR => "warning",
+   FIFO_MEMORY_TYPE => "ultra", -- use UltraRAM blocks
+   FIFO_READ_LATENCY => 0,  -- FWFT
+   FIFO_WRITE_DEPTH => 4096,
+   FULL_RESET_VALUE => 0,
+   PROG_EMPTY_THRESH => 10,
+   PROG_FULL_THRESH => 10,
+   RD_DATA_COUNT_WIDTH => 1,
+   READ_DATA_WIDTH => 72,
+   READ_MODE => "fwft",
+   SIM_ASSERT_CHK => 0,
+   USE_ADV_FEATURES => "0707",
+   WAKEUP_TIME => 2,  -- use sleep pin
+   WRITE_DATA_WIDTH => 72,
+   WR_DATA_COUNT_WIDTH => 1
+)
+port map (
+   almost_empty => open,
+   almost_full => open,
+   data_valid => open,
+   dbiterr => open,
+   dout => FIFO_dout,
+   empty => FIFO_empty,
+   full => open,
+   overflow => open,
+   prog_empty => open,
+   prog_full => open,
+   rd_data_count => open,
+   rd_rst_busy => open,
+   sbiterr => open,
+   underflow => open,
+   wr_ack => open,
+   wr_data_count => open, 
+   wr_rst_busy => open,
+   din => FIFO_din,
+   injectdbiterr => '0',
+   injectsbiterr => '0',
+   rd_en => FIFO_rd_en,
+   rst => reset,
+   sleep => FIFO_sleep,
+   wr_clk => clock,
+   wr_en => FIFO_wr_en
+);
 
 end stc3_arch;

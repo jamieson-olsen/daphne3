@@ -11,7 +11,7 @@ use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
 
 entity baseline is
-generic( runlength: integer := 256 ); -- must be power of 2: 32, 64, 128, or 256
+generic( baseline_runlength: integer := 256 ); -- must be power of 2: 32, 64, 128, or 256
 port(
     clock: in  std_logic;
     reset: in  std_logic;
@@ -39,7 +39,7 @@ begin
                 sum_reg <= (others=>'0');
                 baseline_reg <= (others=>'1');
             else
-                case (runlength) is
+                case (baseline_runlength) is
                     when 32 =>
                         if (count_reg=X"1F") then
                             sum_reg <= "00000000" & din;
