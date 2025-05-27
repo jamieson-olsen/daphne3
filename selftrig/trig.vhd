@@ -138,7 +138,7 @@ begin
     port map(
         clk => clock,
         ce  => '1',
-        a   => "11111", -- may need to fine tune this delay here
+        a   => "11101", -- may need to fine tune this delay here
         d   => triggered_dly224_i,
         q   => trig,
         q31 => open

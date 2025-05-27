@@ -5,7 +5,7 @@ library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
 
-use STD.textio.all;
+use std.textio.all;
 use ieee.std_logic_textio.all;
 
 entity stc3_testbench is
@@ -52,8 +52,8 @@ reset <= '1', '0' after 96ns;
 transactor: process(clock)
     file test_vector: text open read_mode is "$dsn/src/selftrig/stc3_testbench.txt";
     variable row: line;
-    variable v_ts: integer := 0;
-    variable v_din: integer := 0;
+    variable v_ts: std_logic_vector(31 downto 0); -- hex string 8 char
+    variable v_din: std_logic_vector(15 downto 0); -- hex string 4 char
 begin 
     if rising_edge(clock) then
    
@@ -61,11 +61,11 @@ begin
             readline(test_vector,row);
         end if;
 
-        read(row, v_ts);
-        read(row, v_din);
+        hread(row, v_ts);
+        hread(row, v_din);
 
-        ts <= std_logic_vector( to_unsigned(v_ts,64) );
-        din <= std_logic_vector( to_unsigned(v_din,14) );
+        ts <= X"00000000" & v_ts;
+        din <= v_din(13 downto 0);
 
     end if;    
 end process transactor;

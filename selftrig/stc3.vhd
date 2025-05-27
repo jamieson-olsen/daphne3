@@ -51,8 +51,8 @@ end stc3;
 
 architecture stc3_arch of stc3 is
 
-type array_11x14_type is array(10 downto 0) of std_logic_vector(13 downto 0);
-signal din_delay: array_11x14_type;
+type array_12x14_type is array(11 downto 0) of std_logic_vector(13 downto 0);
+signal din_delay: array_12x14_type;
 
 signal R0, R1, R2, R3, R4, R5: std_logic_vector(13 downto 0);
 signal block_count: integer range 0 to 31 := 0;
@@ -62,7 +62,7 @@ type state_type is (rst, wait4trig, w0, w1, w2, w3, h0, h1, h2, h3, h4, h5, h6, 
                     d16, d17, d18, d19, d20, d21, d22, d23, d24, d25, d26, d27, d28, d29, d30, d31);
 signal state: state_type;
 
-signal trig_ts: std_logic_vector(63 downto 0) := (others=>'0');
+signal trig_sample_ts, sample0_ts: std_logic_vector(63 downto 0) := (others=>'0');
 signal bline, trig_sample: std_logic_vector(13 downto 0) := (others=>'0');
 signal triggered, forcetrig_reg: std_logic := '0';
 signal FIFO_din: std_logic_vector(71 downto 0) := (others=>'0');
@@ -93,7 +93,7 @@ end component;
 begin
 
 -- assume trigger latency is 256 clocks
--- + 64 pre-trigger samples = total delay is 320 clocks!
+-- + 64 pre-trigger samples = total delay is ~320 clocks!
 -- use 32 bit shift register primitives (srlc32e) for this
 
 din_delay(0) <= din;
@@ -105,7 +105,7 @@ gen_delay_bit: for b in 13 downto 0 generate
         port map(
             clk => clock,
             ce => '1',
-            a => "11111",
+            a => "11111", -- max delay
             d => din_delay(s)(b),
             q => open,
             q31 => din_delay(s+1)(b)
@@ -114,11 +114,28 @@ gen_delay_bit: for b in 13 downto 0 generate
     end generate gen_delay_srlc;
 end generate gen_delay_bit;
 
--- din_delay(0)(13..0) = din(13..0) live no delay
--- din_delay(1)(13..0) = din(13..0) delayed by 32 clocks
--- din_delay(2)(13..0) = din(13..0) delayed by 64 clocks
+-- din_delay(0) = din live no delay
+-- din_delay(1) = din delayed by 32 clocks
+-- din_delay(2) = din delayed by 64 clocks
 -- ...
--- din_delay(10)(13..0) = din(13..0) delayed by 320 clocks
+-- din_delay(10) = din delayed by 320 clocks
+
+-- the last delay segment, din_delay(11), 
+-- needs to be fine tuned to line up with FSM d* states
+
+gen_delay2_bit: for b in 13 downto 0 generate
+
+    last_srlc32e_inst : srlc32e
+    port map(
+        clk => clock,
+        ce => '1',
+        a => "00111", -- fine tune this delay 
+        d => din_delay(10)(b),
+        q => din_delay(11)(b),
+        q31 => open
+    );
+
+end generate gen_delay2_bit;
 
 -- now compute the average signal baseline level over the last N samples
 
@@ -146,7 +163,7 @@ end process trig_proc;
 pack_proc: process(clock)
 begin
     if rising_edge(clock) then
-        R0 <= din_delay(10);
+        R0 <= din_delay(11);
         R1 <= R0;
         R2 <= R1;
         R3 <= R2;
@@ -154,8 +171,6 @@ begin
         R5 <= R4;
     end if;
 end process pack_proc;       
-
--- trigger module latency is FIXED at 128 clocks:
 
 trig_inst: trig
 port map(
@@ -166,7 +181,7 @@ port map(
      threshold => threshold,
      trig => triggered,
      trig_sample => trig_sample, 
-     trig_ts => trig_ts 
+     trig_ts => trig_sample_ts 
 );        
 
 -- big FSM waits for trigger condition then dense pack assembly of the output frame 
@@ -264,12 +279,17 @@ begin
     end if;
 end process builder_fsm_proc;
 
+-- the timestamp encoded in the output record header corresponds to sample0, NOT the trigger sample!
+-- since there are 64 pre-trigger samples, this difference is fixed at ~64.
+
+sample0_ts <= std_logic_vector( unsigned(trig_sample_ts) - 64 );
+
 -- mux to determine what is written into the output FIFO, note this is 72 bits to match ultraram bus
 -- this output FIFO is deep enough to hold MANY output records
 -- set the upper byte to 0xFF to mark the first word of each record (makes downstream selection logic easier)
 
 FIFO_din <= X"FF00000000" & link_id & slot_id & crate_id & detector_id & version_id when (state=h0) else
-            X"00" & trig_ts when (state=h1) else
+            X"00" & sample0_ts when (state=h1) else -- timestamp of sample0 (NOT the trigger sample!)
             X"00" & "0000000000" & ch_id & "00" & bline & "00" & threshold & "00" & trig_sample when (state=h2) else
             -- reserved for header 3 (all zeros)
             -- reserved for header 4 (all zeros)
