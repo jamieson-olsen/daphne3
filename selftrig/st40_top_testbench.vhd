@@ -1,132 +1,94 @@
--- testbench for the single self triggered core module STC
--- jamieson olsen <jamieson@fnal.gov>
+-- testbench for the 40 channel self triggered sender for DAPHNE3/DAPHNE_MEZZ
+-- Jamieson Olsen <jamieson@fnal.gov>
 
 library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
-
-use STD.textio.all;
 use ieee.std_logic_textio.all;
+use std.textio.all;
+use work.daphne3_package.all;
 
-use work.daphne2_package.all;
+entity st40_top_testbench is
+end st40_top_testbench;
 
-entity st10_top_testbench is
-end st10_top_testbench;
+architecture st40_top_testbench_arch of st40_top_testbench is
 
-architecture st10_top_testbench_arch of st10_top_testbench is
-
-component st10_top is
-generic( link_id: std_logic_vector(5 downto 0)  := "000000" );
+component st40_top
+generic( baseline_runlength: integer := 256 );
 port(
+    link_id: std_logic_vector(5 downto 0);
+    slot_id: in std_logic_vector(3 downto 0);
+    crate_id: in std_logic_vector(9 downto 0);
+    detector_id: in std_logic_vector(5 downto 0);
+    version_id: in std_logic_vector(5 downto 0);
+    threshold: in std_logic_vector(9 downto 0);
+
+    clock: in std_logic; -- main clock 62.5 MHz
     reset: in std_logic;
-
-    threshold: std_logic_vector(13 downto 0);
-    slot_id: std_logic_vector(3 downto 0);
-    crate_id: std_logic_vector(9 downto 0);
-    detector_id:   std_logic_vector(5 downto 0);
-    version_id:  std_logic_vector(5 downto 0);
-
-    aclk: in std_logic; -- AFE clock 62.500 MHz
     timestamp: in std_logic_vector(63 downto 0);
-	afe_dat: in array_10x14_type;
-    ch_id: in array_10x6_type; -- input channel IDs
-
-    fclk: in std_logic; -- transmit clock to FELIX 120.237 MHz 
-    dout: out std_logic_vector(31 downto 0);
-    kout: out std_logic_vector(3 downto 0)
+    enable: in std_logic_vector(39 downto 0);
+    forcetrig: in std_logic;
+	din: in array_40x14_type; -- ALL AFE channels feed into this module
+    dout: out std_logic_vector(63 downto 0); -- output to single channel 10G sender
+    dv: out std_logic;
+    last: out std_logic
 );
 end component;
 
 signal reset: std_logic := '1';
-signal aclk: std_logic := '0';
+signal clock: std_logic := '0';
 signal timestamp: std_logic_vector(63 downto 0) := X"0000000000000000";
-
-signal fclk: std_logic := '0';
-signal afe_dat: array_10x14_type;
-
-constant ch_id: array_10x6_type := ("011010", "011000", "010011", "010001", "010000", "001100", "001000", "000110", "000011", "000000");
+signal din: array_40x14_type;
 
 begin
 
-aclk <= not aclk after 8.000 ns; --  62.500 MHz
-fclk <= not fclk after 4.158 ns; -- 120.237 MHz
-
+clock <= not clock after 8.000 ns; --  62.500 MHz
 reset <= '1', '0' after 96ns;
 
-ts_proc: process 
+transactor: process(clock)
+    file test_vector: text open read_mode is "$dsn/src/selftrig/st40_top_testbench.txt";
+    variable row: line;
+    variable v_ts: std_logic_vector(31 downto 0);  -- hex string 8 char
+    variable v_din: array_40x16_type; -- hex string 4 char / 16 bits per channel
 begin 
-    wait until falling_edge(aclk);
-    timestamp <= std_logic_vector(unsigned(timestamp) + 1);
-end process ts_proc;
+    if rising_edge(clock) then
+   
+        if (not endfile(test_vector)) then
+            readline(test_vector,row);
+        end if;
 
-pulse_proc: process 
-begin
-    afe_dat(0) <= "00001000000000";
-    afe_dat(1) <= "00001000000000";
-    afe_dat(2) <= "00001000000000";
-    afe_dat(3) <= "00001000000000";
-    afe_dat(4) <= "00001000000000";
-    afe_dat(5) <= "00001000000000";
-    afe_dat(6) <= "00001000000000";
-    afe_dat(7) <= "00001000000000";
-    afe_dat(8) <= "00001000000000";
-    afe_dat(9) <= "00001000000000";
+        hread(row, v_ts);
+        for i in 0 to 39 loop
+          hread(row, v_din(i));
+        end loop;
 
-    wait for 1000ns;
-    wait until falling_edge(aclk);
-    afe_dat(3) <= "00000000000001";
-    wait until falling_edge(aclk);
-    afe_dat(3) <= "00000000000010";
-    wait until falling_edge(aclk);
-    afe_dat(3) <= "00000000000011";
-    wait until falling_edge(aclk);
-    afe_dat(3) <= "00000000000100";
-    wait until falling_edge(aclk);
-    afe_dat(3) <= "00001000000000";
+        timestamp <= X"00000000" & v_ts;
+        for i in 0 to 39 loop
+            din(i) <= v_din(i)(13 downto 0);  -- cut down to 14 bits
+        end loop;
 
-    wait for 500ns;
-    wait until falling_edge(aclk);
-    afe_dat(7) <= "00000000000101";
-    wait until falling_edge(aclk);
-    afe_dat(7) <= "00000000000110";
-    wait until falling_edge(aclk);
-    afe_dat(7) <= "00000000000111";
-    wait until falling_edge(aclk);
-    afe_dat(7) <= "00000000001000";
-    wait until falling_edge(aclk);
-    afe_dat(7) <= "00001000000000";
+    end if;    
+end process transactor;
 
-    wait for 25us;
-    wait until falling_edge(aclk);
-    afe_dat(3) <= "00000000001001";
-    wait until falling_edge(aclk);
-    afe_dat(3) <= "00000000001010";
-    wait until falling_edge(aclk);
-    afe_dat(3) <= "00000000001011";
-    wait until falling_edge(aclk);
-    afe_dat(3) <= "00000000001100";
-    wait until falling_edge(aclk);
-    afe_dat(3) <= "00001000000000";
 
-    wait;
-end process pulse_proc;
+-- convert 16 bit vectors to 14 bits
 
-DUT: st10_top
-generic map ( link_id => "000001" )
+DUT: st40_top
+generic map ( baseline_runlength => 64 )
 port map(
-    reset => reset,
-
-    threshold => "00000000100000",
+    link_id => "000001",
     slot_id => "0011",
     crate_id => "0000100100",
     detector_id => "100000",
     version_id => "001100",
-
-    aclk => aclk,
+    threshold => "1000000000", -- threshold is 512 counts below calculated baseline
+    clock => clock,
+    reset => reset,
     timestamp => timestamp,
-	afe_dat => afe_dat,
-    ch_id => ch_id,
-    fclk => fclk
+    enable => X"FFFFFFFFFF",
+    forcetrig => '0',
+	din => din
 );
 
-end st10_top_testbench_arch;
+end st40_top_testbench_arch;
+

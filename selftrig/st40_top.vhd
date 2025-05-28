@@ -11,23 +11,26 @@ use ieee.numeric_std.all;
 library unisim;
 use unisim.vcomponents.all;
 
+library work;
+use work.daphne3_package.all;
+
 entity st40_top is
 generic( baseline_runlength: integer := 256 ); -- options 32, 64, 128, or 256
 port(
-
-    threshold: in std_logic_vector(9 downto 0); -- counts below calculated baseline
+    link_id: std_logic_vector(5 downto 0);
     slot_id: in std_logic_vector(3 downto 0);
     crate_id: in std_logic_vector(9 downto 0);
     detector_id: in std_logic_vector(5 downto 0);
     version_id: in std_logic_vector(5 downto 0);
-    enable: in std_logic_vector(39 downto 0);
+    threshold: in std_logic_vector(9 downto 0); -- counts below calculated baseline
 
     clock: in std_logic; -- main clock 62.5 MHz
     reset: in std_logic;
     timestamp: in std_logic_vector(63 downto 0);
-	afe_dat: in array_40x14_type; -- ALL AFE channels feed into this module
-
-    dout: out std_logic_vector(63 downto 0); -- output to 10G sender
+    enable: in std_logic_vector(39 downto 0);
+    forcetrig: in std_logic;
+	din: in array_40x14_type; -- ALL AFE channels feed into this module
+    dout: out std_logic_vector(63 downto 0); -- output to single channel 10G sender
     dv: out std_logic;
     last: out std_logic
 );
@@ -35,16 +38,14 @@ end st40_top;
 
 architecture st40_top_arch of st40_top is
  
-    type state_type is (rst, scan, dump, idle);
+    type state_type is (rst, scan, dump, pause);
     signal state: state_type;
-
-    signal sela: integer range 0 to 4;
-    signal selc: integer range 0 to 7;
-    signal fifo_ae: array_5x8_type;
-    signal fifo_rden: array_5x8_type;
-    signal fifo_ready: std_logic;
-    signal fifo_do: array_5x8x32_type;
-    signal fifo_ko: array_5x8x4_type;
+    signal sel: integer range 0 to 39;
+    signal fifo_rd_en: std_logic_vector(39 downto 0) := (others=>'0');
+    signal ready: std_logic_vector(39 downto 0) := (others=>'0');
+    type array_40x72_type is array(39 downto 0) of std_logic_vector(71 downto 0);
+    signal fifo_dout: array_40x72_type;
+    signal fifo_dout_mux: std_logic_vector(71 downto 0);
 
     component stc3 is
     generic( baseline_runlength: integer := 256 ); -- options 32, 64, 128, or 256
@@ -63,118 +64,88 @@ architecture st40_top_arch of st40_top is
         forcetrig: in std_logic; -- force a trigger
         timestamp: in std_logic_vector(63 downto 0);
     	din: in std_logic_vector(13 downto 0); -- aligned AFE data
-        FIFO_rd_en: in std_logic; -- output FIFO read enable
-        FIFO_dout: out std_logic_vector(71 downto 0); -- output FIFO data
-        FIFO_empty: out std_logic -- output FIFO flag
+        rd_en: in std_logic; -- output FIFO read enable
+        dout: out std_logic_vector(71 downto 0); -- output FIFO data
+        ready: out std_logic -- got something in the output FIFO yo
     );
     end component;
 
 begin
 
-    -- make 40 self-trigger-channel (STC) machines
+    -- make 40 self-trigger-channel (STC) machines...
 
     gen_stc: for i in 39 downto 0 generate
 
-            stc3_inst: stc3 
+            stc3_inst: stc3
+            generic map ( baseline_runlength => baseline_runlength )
             port map(   
-                threshold => threshold,
+                link_id => link_id,
+                ch_id => std_logic_vector( to_unsigned(i,6) ),
                 slot_id => slot_id,
                 crate_id => crate_id,
-                ch_id => i,
                 detector_id => detector_id,
                 version_id => version_id,
-                enable => enable(i),
+                threshold => threshold,
 
                 clock => clock,
                 reset => reset,
-                timestamp => timestamp,
-            	din => afe_dat(i),
+                enable => enable(i),
                 forcetrig => forcetrig,
-
-                fifo_rd_en => fifo_rd_en(i),
-                fifo_dout => fifo_dout(i),
-                fifo_empty => fifo_empty(i)
+                timestamp => timestamp,
+            	din => din(i),
+                rd_en => fifo_rd_en(i),
+                dout => fifo_dout(i),
+                ready => ready(i)
               );
 
     end generate gen_stc;
 
-    -- fifo read enable and fifo flag selection
+    -- generate the read enables for the 40 channel FIFOs
 
+    gen_rden: for i in 39 downto 0 generate
+        fifo_rd_en(i) <= '1' when (sel=i and state=dump) else '0';
+    end generate gen_rden;
 
+    -- FSM scans the STC machines looking for a machine with a NON-EMPTY output FIFO. When it finds
+    -- one it dumps one complete output record, then goes idle for one clock, then moves on to the next channel 
+    -- and resumes scanning (round robin).
 
-    -- sel_reg is a straight 6 bit register, but it is encoded with values 0-7, 10-17, 20-27, 30-37, 40-47
-    -- there are gaps, so be careful when incrementing and looping...
-
-    fifo_ready_proc: process(sela, selc, fifo_ae)
+    fsm_proc: process(clock)
     begin
-        fifo_ready <= '0'; -- default
-        loop_a: for a in 4 downto 0 loop
-            loop_c: for c in 7 downto 0 loop
-                if (sela=a and selc=c and fifo_ae(a)(c)='1') then
-                    fifo_ready <= '1';
-                end if;
-            end loop loop_c;
-        end loop loop_a;
-    end process fifo_ready_proc;
-
-    gen_rden_a: for a in 4 downto 0 generate
-        gen_rden_c: for c in 7 downto 0 generate
-            fifo_rden(a)(c) <= '1' when (sela=a and selc=c and state=dump) else '0';
-        end generate gen_rden_c;
-    end generate gen_rden_a;
-
-    -- FSM scans all STC machines in round robin manner, looking for a FIFO almost empty "fifo_ae" flag set. when it finds
-    -- this, it reads one complete frame from that machine, then sends a few idles, then returns to scanning again.
-
-    fsm_proc: process(fclk)
-    begin
-        if rising_edge(fclk) then
+        if rising_edge(clock) then
             if (reset='1') then
                 state <= rst;
             else
                 case(state) is
 
                     when rst =>
-                        sela <= 0;
-                        selc <= 0;
+                        sel <= 0;
                         state <= scan;
 
                     when scan => 
-                        if (fifo_ready='1') then
+                        if ( ready(sel)='1' ) then -- current channel gots something to send, lets dump a whole record
                             state <= dump;
                         else
-                            if (selc=7) then
-                                if (sela=4) then -- loop around when sel = 4 7
-                                    sela <= 0;
-                                    selc <= 0;
-                                else
-                                    sela <= sela + 1;
-                                    selc <= 0;
-                                end if;
+                            if (sel = 39) then -- otherwise, move on to next channel (round robin)
+                                sel <= 0;
                             else
-                                selc <= selc + 1;
+                                sel <= sel + 1;
                             end if;
                             state <= scan;
                         end if;
 
-                    when dump =>
-                        if (k="0001" and d(7 downto 0)=X"DC") then -- this the EOF word, done reading from this STC
-                            state <= idle;
+                    when dump => -- dump one entire output record to the output
+                        if ( fifo_dout_mux(71 downto 64)=X"ED" ) then -- this the marker for the LAST word of record
+                            state <= pause;
                         else
                             state <= dump;
                         end if;
 
-                    when idle => -- send one idle word and resume scanning...
-                        if (selc = 7) then
-                            if (sela = 4) then -- loop around when sel = 4 7
-                                sela <= 0;
-                                selc <= 0;
-                            else
-                                sela <= sela + 1;
-                                selc <= 0;
-                            end if;
+                    when pause => -- pause for 1 clock, increment ch_select & resume scanning...
+                        if (sel = 39) then
+                            sel <= 0;
                         else
-                            selc <= selc + 1;
+                            sel <= sel + 1;
                         end if;
                         state <= scan;
 
@@ -185,33 +156,29 @@ begin
         end if;
     end process fsm_proc;
 
-    -- output muxes
-     
-    outmux_proc: process(fifo_do, fifo_ko, sela, selc, state)
-    begin
-        d <= X"000000BC"; -- default
-        k <= "0001"; -- default
-        loop_a: for a in 4 downto 0 loop
-        loop_c: for c in 7 downto 0 loop
-            if ( sela=a and selc=c and state=dump ) then
-                d <= fifo_do(a)(c);
-                k <= fifo_ko(a)(c);
-            end if;
-        end loop loop_c;
-        end loop loop_a;
-    end process outmux_proc;
+    -- big output data mux 40:1
 
+    outmux_proc: process(sel,fifo_dout)
+    begin
+        fifo_dout_mux <= fifo_dout(sel);
+    end process outmux_proc;
+     
     -- register the outputs
 
-    outreg_proc: process(fclk)
+    outreg_proc: process(clock)
     begin
-        if rising_edge(fclk) then
-            dout_reg <= d;
-            kout_reg <= k;
+        if rising_edge(clock) then
+            dout <= fifo_dout_mux(63 downto 0); -- strip off marker byte
+
+            if ( state=dump ) then
+                dv <= '1';
+            else
+                dv <= '0';
+            end if;
+
         end if;
     end process outreg_proc;
 
-    dout <= dout_reg;
-    kout <= kout_reg;
+    last <= '1' when (state=pause) else '0';
 
 end st40_top_arch;

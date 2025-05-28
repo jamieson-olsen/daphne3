@@ -41,9 +41,9 @@ port(
     forcetrig: in std_logic; -- force a trigger
     timestamp: in std_logic_vector(63 downto 0);
 	din: in std_logic_vector(13 downto 0); -- aligned AFE data
-    FIFO_rd_en: in std_logic; -- output FIFO read enable
-    FIFO_dout: out std_logic_vector(71 downto 0); -- output FIFO data
-    FIFO_empty: out std_logic -- output FIFO flag
+    ready: out std_logic; -- i have something!
+    rd_en: in std_logic; -- output FIFO read enable
+    dout: out std_logic_vector(71 downto 0) -- output FIFO data
 );
 end stc3;
 
@@ -65,6 +65,8 @@ signal calculated_baseline, trig_sample_dat: std_logic_vector(13 downto 0) := (o
 signal triggered, forcetrig_reg: std_logic := '0';
 signal FIFO_din: std_logic_vector(71 downto 0) := (others=>'0');
 signal FIFO_wr_en, FIFO_sleep: std_logic := '0';
+signal marker: std_logic_vector(7 downto 0) := X"00";
+signal prog_empty: std_logic;
 
 component baseline
 generic( baseline_runlength: integer := 256 );
@@ -282,26 +284,32 @@ end process builder_fsm_proc;
 
 sample0_ts <= std_logic_vector( unsigned(trig_sample_ts) - 64 );
 
--- mux to determine what is written into the output FIFO, note this is 72 bits to match ultraram bus
--- this output FIFO is deep enough to hold MANY output records
--- set the upper byte to 0xFF to mark the first word of each record (makes downstream selection logic easier)
+-- the upper byte of the FIFO is used for a marker to indicate the first and last words of the 
+-- output record. this is done to make the next stage selector logic easier.
 
-FIFO_din <= X"FF00000000" & link_id & slot_id & crate_id & detector_id & version_id when (state=h0) else
-            X"00" & sample0_ts when (state=h1) else -- timestamp of sample0 (NOT the trigger sample!)
-            X"00" & ("0000000000" & ch_id) & ("00" & calculated_baseline) & ("000000" & threshold) & ("00" & trig_sample_dat) when (state=h2) else
+marker <= X"BE" when (state=h0) else  -- mark first word
+          X"ED" when (state=d27 and block_count=31) else -- mark the last word
+          X"00";
+
+-- mux to determine what is written into the output FIFO, note this is 72 bits to match ultraram bus
+-- this output FIFO is deep enough to hold MANY output records.
+
+FIFO_din <= marker & X"00000000" & link_id & slot_id & crate_id & detector_id & version_id when (state=h0) else
+            marker & sample0_ts when (state=h1) else -- timestamp of sample0 (NOT the trigger sample!)
+            marker & ("0000000000" & ch_id) & ("00" & calculated_baseline) & ("000000" & threshold) & ("00" & trig_sample_dat) when (state=h2) else
             -- reserved for header 3 (all zeros)
             -- reserved for header 4 (all zeros)
             -- reserved for header 5 (all zeros)
             -- reserved for header 6 (all zeros)
             -- reserved for header 7 (all zeros)
             -- reserved for header 8 (all zeros)
-            X"00" & R0(7 downto 0) & R1 & R2 & R3 & R4                    when (state=d0) else -- sample4l ... sample0
-            X"00" & R0(1 downto 0) & R1 & R2 & R3 & R4 & R5(13 downto 8)  when (state=d5) else -- sample9l ... sample4h
-            X"00" & R0(9 downto 0) & R1 & R2 & R3 & R4(13 downto 2)       when (state=d9) else -- sample13l ... sample9h
-            X"00" & R0(3 downto 0) & R1 & R2 & R3 & R4 & R5(13 downto 10) when (state=d14) else -- sample18l ... sample13h
-            X"00" & R0(11 downto 0) & R1 & R2 & R3 & R4(13 downto 4)      when (state=d18) else -- sample22l ... sample18h
-            X"00" & R0(5 downto 0) & R1 & R2 & R3 & R4 & R5(13 downto 12) when (state=d23) else -- sample27l ... sample22h
-            X"00" & R0 & R1 & R2 & R3 & R4(13 downto 6)                   when (state=d27) else -- sample31 ... sample27h
+            marker & R0(7 downto 0) & R1 & R2 & R3 & R4                    when (state=d0) else -- sample4l ... sample0
+            marker & R0(1 downto 0) & R1 & R2 & R3 & R4 & R5(13 downto 8)  when (state=d5) else -- sample9l ... sample4h
+            marker & R0(9 downto 0) & R1 & R2 & R3 & R4(13 downto 2)       when (state=d9) else -- sample13l ... sample9h
+            marker & R0(3 downto 0) & R1 & R2 & R3 & R4 & R5(13 downto 10) when (state=d14) else -- sample18l ... sample13h
+            marker & R0(11 downto 0) & R1 & R2 & R3 & R4(13 downto 4)      when (state=d18) else -- sample22l ... sample18h
+            marker & R0(5 downto 0) & R1 & R2 & R3 & R4 & R5(13 downto 12) when (state=d23) else -- sample27l ... sample22h
+            marker & R0 & R1 & R2 & R3 & R4(13 downto 6)                   when (state=d27) else -- sample31 ... sample27h
             X"000000000000000000";
 
 -- output FIFO write enable
@@ -321,7 +329,7 @@ FIFO_wr_en <= '1' when (state=h0) else
               '1' when (state=d14) else
               '1' when (state=d18) else
               '1' when (state=d23) else
-              '1' when (state=d27) else
+              '1' when (state=d27) else -- note no trailer words!
               '0';
 
 FIFO_sleep <= '1' when (state=rst) else
@@ -331,9 +339,16 @@ FIFO_sleep <= '1' when (state=rst) else
 -- UltraRAM sync FIFO macro
 -- 4k words deep x 72 bits wide (this is enough to hold 17 hits!)
 -- first word fall through (FWFT)
--- this requires SystemVerilog assertions module
 
-xpm_fifo_sync_inst : xpm_fifo_sync
+-- writes into the output FIFO are not continuous; they stutter due to the 
+-- dense packing cadence (d0, d5, d9) and are on average active only 1 out
+-- of every 5 clocks. this means that the downstream logic reading from 
+-- this FIFO needs to hold off, and let this output FIFO really fill up
+-- before starting to read it out. in other words, the output FIFO should
+-- continue to report that it is empty until it has nearly all of an
+-- output record stored in it.
+
+output_fifo_inst : xpm_fifo_sync
 generic map (
    CASCADE_HEIGHT => 0,
    DOUT_RESET_VALUE => "0",
@@ -343,14 +358,14 @@ generic map (
    FIFO_READ_LATENCY => 0,  -- FWFT
    FIFO_WRITE_DEPTH => 4096,
    FULL_RESET_VALUE => 0,
-   PROG_EMPTY_THRESH => 10,
+   PROG_EMPTY_THRESH => 220, -- let it fill up nearly all the way!
    PROG_FULL_THRESH => 10,
    RD_DATA_COUNT_WIDTH => 1,
    READ_DATA_WIDTH => 72,
    READ_MODE => "fwft",
    SIM_ASSERT_CHK => 0,
    USE_ADV_FEATURES => "0707",
-   WAKEUP_TIME => 2,  -- use sleep pin
+   WAKEUP_TIME => 0, -- 0=No Sleep till Brooklyn, 2=use sleep pin
    WRITE_DATA_WIDTH => 72,
    WR_DATA_COUNT_WIDTH => 1
 )
@@ -359,11 +374,11 @@ port map (
    almost_full => open,
    data_valid => open,
    dbiterr => open,
-   dout => FIFO_dout,
-   empty => FIFO_empty,
+   dout => dout,
+   empty => open,
    full => open,
    overflow => open,
-   prog_empty => open,
+   prog_empty => prog_empty, -- let it fill up
    prog_full => open,
    rd_data_count => open,
    rd_rst_busy => open,
@@ -375,11 +390,13 @@ port map (
    din => FIFO_din,
    injectdbiterr => '0',
    injectsbiterr => '0',
-   rd_en => FIFO_rd_en,
+   rd_en => rd_en,
    rst => reset,
    sleep => FIFO_sleep,
    wr_clk => clock,
    wr_en => FIFO_wr_en
 );
+
+ready <= not prog_empty;
 
 end stc3_arch;
