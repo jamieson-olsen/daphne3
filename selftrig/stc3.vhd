@@ -67,7 +67,7 @@ signal FIFO_din: std_logic_vector(71 downto 0) := (others=>'0');
 signal FIFO_wr_en, FIFO_sleep: std_logic := '0';
 signal marker: std_logic_vector(7 downto 0) := X"00";
 signal prog_empty: std_logic;
-signal rd_data_count, wr_data_count: std_logic_vector(12 downto 0);
+signal fifo_word_count: std_logic_vector(12 downto 0);
 
 component baseline
 generic( baseline_runlength: integer := 256 );
@@ -297,7 +297,7 @@ marker <= X"BE" when (state=h0) else  -- mark first word
 FIFO_din <= marker & X"00000000" & link_id & slot_id & crate_id & detector_id & version_id when (state=h0) else
             marker & sample0_ts when (state=h1) else -- timestamp of sample0 (NOT the trigger sample!)
             marker & ("0000000000" & ch_id) & ("00" & calculated_baseline) & ("000000" & threshold) & ("00" & trig_sample_dat) when (state=h2) else
-            marker & X"00000000" & "000" & rd_data_count & "000" & wr_data_count when (state=h3) else -- counters to determine how full the FIFO is 
+            marker & X"000000000000" & "000" & fifo_word_count when (state=h3) else -- report how many words are currently in the FIFO
             -- reserved for header 4 (all zeros)
             -- reserved for header 5 (all zeros)
             -- reserved for header 6 (all zeros)
@@ -383,12 +383,12 @@ port map (
    overflow => open,
    prog_empty => prog_empty, -- let it fill up
    prog_full => open,
-   rd_data_count => rd_data_count,
+   rd_data_count => open,
    rd_rst_busy => open,
    sbiterr => open,
    underflow => open,
    wr_ack => open,
-   wr_data_count => wr_data_count, 
+   wr_data_count => fifo_word_count, -- number of words in the FIFO
    wr_rst_busy => open,
    din => FIFO_din,
    injectdbiterr => '0',
