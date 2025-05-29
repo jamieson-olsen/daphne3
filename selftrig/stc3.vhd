@@ -10,7 +10,7 @@
 -- The output FIFO is UltraRAM based and is a single clock domain.
 
 -- the trigger module provided here is very basic and is intended as a placeholder
--- to simulate a more advanced trigger which has a total latency of 128 clock cycles.
+-- to simulate a more advanced trigger which has a total latency of 64 clock cycles.
 
 -- Jamieson Olsen <jamieson@fnal.gov>
 
@@ -33,7 +33,7 @@ port(
     crate_id: std_logic_vector(9 downto 0);
     detector_id: std_logic_vector(5 downto 0);
     version_id: std_logic_vector(5 downto 0);
-    threshold: std_logic_vector(9 downto 0); -- counts below calculated avg baseline
+    threshold: std_logic_vector(9 downto 0); -- counts relative calculated avg baseline
 
     clock: in std_logic; -- master clock 62.5MHz
     reset: in std_logic;
@@ -49,8 +49,8 @@ end stc3;
 
 architecture stc3_arch of stc3 is
 
-type array_12x14_type is array(11 downto 0) of std_logic_vector(13 downto 0);
-signal din_delay: array_12x14_type;
+type array_6x14_type is array(5 downto 0) of std_logic_vector(13 downto 0);
+signal din_delay: array_6x14_type;
 
 signal R0, R1, R2, R3, R4, R5: std_logic_vector(13 downto 0);
 signal block_count: integer range 0 to 31 := 0;
@@ -67,6 +67,7 @@ signal FIFO_din: std_logic_vector(71 downto 0) := (others=>'0');
 signal FIFO_wr_en, FIFO_sleep: std_logic := '0';
 signal marker: std_logic_vector(7 downto 0) := X"00";
 signal prog_empty: std_logic;
+signal rd_data_count, wr_data_count: std_logic_vector(12 downto 0);
 
 component baseline
 generic( baseline_runlength: integer := 256 );
@@ -92,23 +93,23 @@ end component;
 
 begin
 
--- assume trigger latency is 256 clocks
--- + 64 pre-trigger samples = total delay is ~320 clocks!
+-- assume trigger latency is 64 clocks
+-- + 64 pre-trigger samples = total delay is ~128 clocks
 -- use 32 bit shift register primitives (srlc32e) for this
 
 din_delay(0) <= din;
 
 gen_delay_bit: for b in 13 downto 0 generate
-    gen_delay_srlc: for s in 9 downto 0 generate
+    gen_delay_srlc: for s in 3 downto 0 generate
 
         srlc32e_0_inst : srlc32e
         port map(
             clk => clock,
             ce => '1',
-            a => "11111", -- max delay
+            a => "11111",
             d => din_delay(s)(b),
             q => open,
-            q31 => din_delay(s+1)(b)
+            q31 => din_delay(s+1)(b) -- fixed delay 32
         );
 
     end generate gen_delay_srlc;
@@ -117,11 +118,10 @@ end generate gen_delay_bit;
 -- din_delay(0) = din live no delay
 -- din_delay(1) = din delayed by 32 clocks
 -- din_delay(2) = din delayed by 64 clocks
--- ...
--- din_delay(10) = din delayed by 320 clocks
+-- din_delay(3) = din delayed by 96 clocks
+-- din_delay(4) = din delayed by 128 clocks
 
--- the last delay segment, din_delay(11), 
--- needs to be fine tuned to line up with FSM d* states
+-- the last delay segment needs to be fine tuned to line up with FSM d* states
 
 gen_delay2_bit: for b in 13 downto 0 generate
 
@@ -129,9 +129,9 @@ gen_delay2_bit: for b in 13 downto 0 generate
     port map(
         clk => clock,
         ce => '1',
-        a => "00111", -- fine tune this delay 
-        d => din_delay(10)(b),
-        q => din_delay(11)(b),
+        a => "01001", -- fine tune this delay 
+        d => din_delay(4)(b),
+        q => din_delay(5)(b),
         q31 => open
     );
 
@@ -163,7 +163,7 @@ end process trig_proc;
 pack_proc: process(clock)
 begin
     if rising_edge(clock) then
-        R0 <= din_delay(11);
+        R0 <= din_delay(5);
         R1 <= R0;
         R2 <= R1;
         R3 <= R2;
@@ -297,7 +297,7 @@ marker <= X"BE" when (state=h0) else  -- mark first word
 FIFO_din <= marker & X"00000000" & link_id & slot_id & crate_id & detector_id & version_id when (state=h0) else
             marker & sample0_ts when (state=h1) else -- timestamp of sample0 (NOT the trigger sample!)
             marker & ("0000000000" & ch_id) & ("00" & calculated_baseline) & ("000000" & threshold) & ("00" & trig_sample_dat) when (state=h2) else
-            -- reserved for header 3 (all zeros)
+            marker & X"00000000" & "000" & rd_data_count & "000" & wr_data_count when (state=h3) else -- counters to determine how full the FIFO is 
             -- reserved for header 4 (all zeros)
             -- reserved for header 5 (all zeros)
             -- reserved for header 6 (all zeros)
@@ -348,6 +348,9 @@ FIFO_sleep <= '1' when (state=rst) else
 -- continue to report that it is empty until it has nearly all of an
 -- output record stored in it.
 
+-- if another trigger occurs while this FSM is busy, it will be IGNORED!
+-- triggers are ONLY monitored when the FSM is in the "wait4trig" state!
+
 output_fifo_inst : xpm_fifo_sync
 generic map (
    CASCADE_HEIGHT => 0,
@@ -360,14 +363,14 @@ generic map (
    FULL_RESET_VALUE => 0,
    PROG_EMPTY_THRESH => 220, -- let it fill up nearly all the way!
    PROG_FULL_THRESH => 10,
-   RD_DATA_COUNT_WIDTH => 1,
+   RD_DATA_COUNT_WIDTH => 13,
    READ_DATA_WIDTH => 72,
    READ_MODE => "fwft",
    SIM_ASSERT_CHK => 0,
    USE_ADV_FEATURES => "0707",
-   WAKEUP_TIME => 0, -- 0=No Sleep till Brooklyn, 2=use sleep pin
+   WAKEUP_TIME => 0, -- 0=No Sleep (till Brooklyn), 2=use sleep pin
    WRITE_DATA_WIDTH => 72,
-   WR_DATA_COUNT_WIDTH => 1
+   WR_DATA_COUNT_WIDTH => 13
 )
 port map (
    almost_empty => open,
@@ -380,12 +383,12 @@ port map (
    overflow => open,
    prog_empty => prog_empty, -- let it fill up
    prog_full => open,
-   rd_data_count => open,
+   rd_data_count => rd_data_count,
    rd_rst_busy => open,
    sbiterr => open,
    underflow => open,
    wr_ack => open,
-   wr_data_count => open, 
+   wr_data_count => wr_data_count, 
    wr_rst_busy => open,
    din => FIFO_din,
    injectdbiterr => '0',

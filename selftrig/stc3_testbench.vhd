@@ -22,7 +22,7 @@ port(
     crate_id: std_logic_vector(9 downto 0);
     detector_id: std_logic_vector(5 downto 0);
     version_id: std_logic_vector(5 downto 0);
-    threshold: std_logic_vector(9 downto 0); -- counts below calculated avg baseline
+    threshold: std_logic_vector(9 downto 0); -- counts relative to calculated avg baseline
 
     clock: in std_logic; -- master clock 62.5MHz
     reset: in std_logic;   
@@ -88,7 +88,7 @@ port map(
     crate_id => "1100000011",
     detector_id => "101001",
     version_id => "100011", 
-    threshold => "1000000000", -- theshold is 512 counts below baseline
+    threshold => "1000000000", -- theshold is 512 counts above baseline
 
     clock => clock,
     reset => reset,

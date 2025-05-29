@@ -29,9 +29,9 @@ port(
     enable: in std_logic_vector(39 downto 0);
     forcetrig: in std_logic;
 	din: in array_40x14_type; -- ALL AFE channels feed into this module
-    dout: out std_logic_vector(63 downto 0); -- output to single channel 10G sender
-    dv: out std_logic;
-    last: out std_logic
+    d0: out std_logic_vector(63 downto 0); -- output to single channel 10G sender
+    d0_valid: out std_logic;
+    d0_last: out std_logic
 );
 end component;
 
@@ -70,9 +70,6 @@ begin
     end if;    
 end process transactor;
 
-
--- convert 16 bit vectors to 14 bits
-
 DUT: st40_top
 generic map ( baseline_runlength => 64 )
 port map(
@@ -81,7 +78,7 @@ port map(
     crate_id => "0000100100",
     detector_id => "100000",
     version_id => "001100",
-    threshold => "1000000000", -- threshold is 512 counts below calculated baseline
+    threshold => "1000000000", -- threshold is 512 counts above calculated baseline
     clock => clock,
     reset => reset,
     timestamp => timestamp,

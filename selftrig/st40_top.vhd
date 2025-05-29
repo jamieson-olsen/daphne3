@@ -22,7 +22,7 @@ port(
     crate_id: in std_logic_vector(9 downto 0);
     detector_id: in std_logic_vector(5 downto 0);
     version_id: in std_logic_vector(5 downto 0);
-    threshold: in std_logic_vector(9 downto 0); -- counts below calculated baseline
+    threshold: in std_logic_vector(9 downto 0); -- counts relative to the calculated baseline
 
     clock: in std_logic; -- main clock 62.5 MHz
     reset: in std_logic;
@@ -30,9 +30,10 @@ port(
     enable: in std_logic_vector(39 downto 0);
     forcetrig: in std_logic;
 	din: in array_40x14_type; -- ALL AFE channels feed into this module
-    dout: out std_logic_vector(63 downto 0); -- output to single channel 10G sender
-    dv: out std_logic;
-    last: out std_logic
+
+    d0: out std_logic_vector(63 downto 0); -- output to single channel 10G sender
+    d0_valid: out std_logic;
+    d0_last:  out std_logic
 );
 end st40_top;
 
@@ -168,17 +169,17 @@ begin
     outreg_proc: process(clock)
     begin
         if rising_edge(clock) then
-            dout <= fifo_dout_mux(63 downto 0); -- strip off marker byte
+            d0 <= fifo_dout_mux(63 downto 0); -- strip off marker byte
 
             if ( state=dump ) then
-                dv <= '1';
+                d0_valid <= '1';
             else
-                dv <= '0';
+                d0_valid <= '0';
             end if;
 
         end if;
     end process outreg_proc;
 
-    last <= '1' when (state=pause) else '0';
+    d0_last <= '1' when (state=pause) else '0';
 
 end st40_top_arch;

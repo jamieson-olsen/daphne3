@@ -22,7 +22,7 @@ end baseline;
 
 architecture baseline_arch of baseline is
 
-    signal baseline_reg: std_logic_vector(13 downto 0) := (others=>'1');
+    signal baseline_reg: std_logic_vector(13 downto 0) := "10000000000000"; -- mid-scale
     signal sum_reg: std_logic_vector(21 downto 0) := (others=>'0');
     signal count_reg: std_logic_vector(7 downto 0) := X"00";
 
@@ -37,7 +37,7 @@ begin
             if (reset='1') then
                 count_reg <= X"00";
                 sum_reg <= (others=>'0');
-                baseline_reg <= (others=>'1');
+                baseline_reg <= "10000000000000";
             else
                 case (baseline_runlength) is
                     when 32 =>
