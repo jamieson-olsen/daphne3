@@ -13,14 +13,14 @@ end stream8_testbench;
 architecture stream8_testbench_arch of stream8_testbench is
 
 component stream8 is
-generic( 
-    link_id: std_logic_vector(5 downto 0) := "000000";
-    slot_id: std_logic_vector(3 downto 0) := "0010";
-    crate_id: std_logic_vector(9 downto 0) := "0000000011";
-    detector_id: std_logic_vector(5 downto 0) := "000010";
-    version_id: std_logic_vector(5 downto 0) := "000011"
- );
 port(
+
+    link_id: std_logic_vector(5 downto 0);
+    slot_id: std_logic_vector(3 downto 0);
+    crate_id: std_logic_vector(9 downto 0);
+    detector_id: std_logic_vector(5 downto 0);
+    version_id: std_logic_vector(5 downto 0);
+
     clock: in std_logic; -- 62.5MHz
     areset: in std_logic;
     ts: in std_logic_vector(63 downto 0);
@@ -57,6 +57,13 @@ end process;
 
 DUT: stream8
 port map(
+
+    link_id => "000000",
+    slot_id => "0010",
+    crate_id => "0000000011",
+    detector_id => "000010",
+    version_id => "000011",
+
     areset => areset,
     clock => clock,
     ts => ts,

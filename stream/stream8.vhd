@@ -27,14 +27,14 @@ use xpm.vcomponents.all;
 use work.daphne3_package.all;
 
 entity stream8 is
-generic( 
-    link_id: std_logic_vector(5 downto 0) := "000000";
-    slot_id: std_logic_vector(3 downto 0) := "0010";
-    crate_id: std_logic_vector(9 downto 0) := "0000000011";
-    detector_id: std_logic_vector(5 downto 0) := "000010";
-    version_id: std_logic_vector(5 downto 0) := "000011"
- );
 port(
+
+    link_id: std_logic_vector(5 downto 0);
+    slot_id: std_logic_vector(3 downto 0);
+    crate_id: std_logic_vector(9 downto 0);
+    detector_id: std_logic_vector(5 downto 0);
+    version_id: std_logic_vector(5 downto 0);
+
     clock: in std_logic; -- 62.5MHz master clock
     areset: in std_logic; -- async reset active high
     ts: in std_logic_vector(63 downto 0);
@@ -61,12 +61,28 @@ architecture stream8_arch of stream8 is
     signal FIFO_din, FIFO_dout: std_logic_vector(64 downto 0);
     signal FIFO_wr_en, FIFO_rd_en, FIFO_empty: std_logic;
 
-    type fsm_type is (rst, readfifo, makeheader);
+    type fsm_type is (rst, purge, hold, header, data);
     signal state: fsm_type;
-
     signal wordcount: integer range 0 to 1023 := 0;
-    signal valid_reg, last_reg: std_logic;
-    signal dout_reg: std_logic_vector(63 downto 0);
+    signal valid_i, valid_reg: std_logic := '0';
+    signal last_i, last_reg: std_logic := '0';
+    signal dout_i, dout_reg: std_logic_vector(63 downto 0) := (others=>'0');
+
+    -- one streaming output record is:
+    -- 512 samples x 8 channels = 4096 14-bit words = 57344 bits (not including header)
+    -- 57344 bits / (64 bits/word) = 896 64-bit data transmission words
+
+    -- increment wordcount on every data word tranmission so that we know
+    -- to assert the LAST output on the last data word number 895
+
+    constant LASTWORDCOUNT: integer range 0 to 1023 := 895;  -- total 896 data words
+
+    -- the holdoff state delays the FIFO read logic, thus allowing the FIFO
+    -- to fill up a bit more. when this constant is tuned properly, the FIFO will
+    -- go empty a few times, but only near the end of the data block. 
+    -- This parameter is hand tuned in simulation...
+
+    constant HOLDOFFCOUNT:  integer range 0 to 1023 := 92;
 
 begin
 
@@ -173,10 +189,11 @@ begin
     -- bcount:    N       N+1     N+2     N+3     N+4     N+5
     -- 
     -- where T is the timestamp for DATAWORD0 which immediately follows
-    -- this stream runs continously never stopping...
+    -- important: this stream runs continously, it never stops...
 
-    -- now manage the write side of the ultraram FIFO like this:
-    -- bcount=0: store timestamp + data words
+    -- Manage the write side of the ultraram FIFO like this:
+    -- the start bit is stored in the FIFO as FIFO_din(64) that's the timestamp marker
+    -- if bcount=0: store timestamp word + data words
     -- all other bcounts: store data words only
     -- hold_reg is only used coming out of reset so that early data words are not stored
 
@@ -237,10 +254,17 @@ begin
 
     -- now manage the read side of the FIFO like this:
 
-    -- if FIFO is empty: drop VALID, output zero
-    -- if FIFO is non-empty: read it
-    --     if MSb is set, store the output, generate header words
-    --     if MSb is not set, pass data word output
+    -- if we are in DATA mode
+    --   if FIFO is empty: drop read_en, drop valid, output zero, don't increment word count
+    --   else:  
+    --      if MSB is set then HEADER mode else
+    --      assert read_en, set valid, output data
+    --      if wordcount = lastword then assert LAST else wordcount++
+    -- else we are in HEADER mode:
+    --     drop read_en, output header words, on last header word assert read_en, switch to DATA mode
+
+    -- we are reading from the FIFO faster than we are filling it, so it can and will go empty,
+    -- this is normal, and we drop the VALID output to tell the serializer we got nothing for those clock cycles.
 
     fsm_proc: process(clk125)
     begin
@@ -251,27 +275,47 @@ begin
                 case state is
 
                 when rst =>
-                    state <= read0;
+                    state <= purge;
 
-                when read0 => -- keep reading until header is seen
+                when purge => -- keep reading until header is seen
                     if (FIFO_empty='0' and FIFO_dout(64)='1') then
-                        state <= makehdr;
+                        state <= hold;
                         wordcount <= 0;
                     else
-                        state <= read0;
+                        state <= purge;
                     end if;
          
-                when makehdr => -- output header
-                    if (wordcount=29) then
-                        state <= read1;
+                when hold => -- holdoff a bit here to make a gap between output records
+                    if (wordcount=HOLDOFFCOUNT) then
+                        state <= header;
                         wordcount <= 0;
                     else
-                        state <= makehdr;
+                        state <= hold;
+                        wordcount <= wordcount + 1;
+                    end if;
+
+                when header => 
+                    if (wordcount=29) then
+                        state <= data;
+                        wordcount <= 0;
+                    else
+                        state <= header;
                         wordcount <= wordcount + 1;
                     end if;                    
 
-                when read1 => 
-
+                when data => 
+                    if (FIFO_empty='0') then -- FIFO has data
+                        if (FIFO_dout(64)='1') then -- this data is beginning of next record
+                            state <= hold;
+                            wordcount <= 0;
+                        else -- normal data, pass it on, increment wordcount
+                            state <= data;
+                            wordcount <= wordcount + 1;
+                        end if;
+                    else -- FIFO is empty, stay here, do not increment word count
+                        state <= data;
+                        wordcount <= wordcount;
+                    end if;
 
                 when others =>
                     state <= rst;
@@ -280,19 +324,33 @@ begin
         end if;
     end process fsm_proc;
 
-    FIFO_rd_en <= '1' when (state=readfifo and FIFO_empty='0' and FIFO_dout(64)='0') else 
-                  '1' when (state=makeheader and wordcount=29) else 
+    FIFO_rd_en <= '1' when (state=rst and FIFO_empty='0' and FIFO_dout(64)='0') else 
+                  '1' when (state=data and FIFO_empty='0' and FIFO_dout(64)='0') else 
+                  '1' when (state=header and wordcount=2) else 
                   '0';
 
-    valid <= '1' when (state=makeheader) else
-             '1' when (state=readfifo and FIFO_empty='0') else
-             '0';
+    valid_i <= '1' when (state=header) else
+               '1' when (state=data and FIFO_empty='0' and FIFO_dout(64)='0') else
+               '0';
 
-    dout <= (X"00000000" & link_id & slot_id & crate_id & detector_id & version_id) when (state=makeheader and wordcount=0) else
-            FIFO_dout(63 downto 0) when (state=makeheader and wordcount=1) else -- this is the timestamp
-            FIFO_dout(63 downto 0) when (state=readfifo and FIFO_empty='0') else -- data pass thru
-            (others=>'0');
+    dout_i <= (X"00000000" & link_id & slot_id & crate_id & detector_id & version_id) when (state=header and wordcount=0) else
+              FIFO_dout(63 downto 0) when (state=header and wordcount=1) else -- this is the timestamp
+              FIFO_dout(63 downto 0) when (state=data and FIFO_empty='0' and FIFO_dout(64)='0') else -- normal data pass thru
+              (others=>'0');
 
-    last <= '0';
+    last_i <= '1' when (state=data and wordcount=LASTWORDCOUNT) else '0';
+
+    regout_proc: process(clk125)
+    begin
+        if rising_edge(clk125) then
+            valid_reg <= valid_i;
+            dout_reg  <= dout_i;
+            last_reg  <= last_i;
+        end if;
+    end process regout_proc;
+
+    valid <= valid_reg;
+    dout  <= dout_reg;
+    last  <= last_reg;
 
 end stream8_arch;
