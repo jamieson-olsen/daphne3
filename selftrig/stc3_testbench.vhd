@@ -1,5 +1,6 @@
 -- testbench for the single self triggered core module STC3 (DAPHNE3 version)
 -- jamieson olsen <jamieson@fnal.gov>
+-- testing
 
 library ieee;
 use ieee.std_logic_1164.all;

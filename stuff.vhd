@@ -3,7 +3,7 @@
 -- this module is a "catch all" for a bunch of misc stuff that exists on the PL side
 -- and needs to connect to the PS side via a single axi-lite interface.
 --
--- "stuff" has some 32-bit registers:
+-- "stuff" has a bunch of 32-bit registers:
 --
 -- base+00: fan speed control register, 8 bits, R/W. 
 --          0x00=off, 0xFF=full speed. power on default is full speed.
@@ -14,16 +14,19 @@
 -- base+20: analog mux address lines (mux_a), 2 bits, R/W
 -- base+24: status LEDs, 6 bits, R/W
 -- base+28: the GIT commit number, 28 bits, R/O
--- base+32: self triggered mode channel enable ch31..ch00 (31..0) R/W 
--- base+36: self triggered mode channel enable ch39..ch32 (7..0) R/W 
+-- base+32: slot_id(3..0) R/W 
+-- base+36: crate_id(9..0) R/W 
+-- base+40: detector_id(5..0) R/W 
+-- base+44: version_id(5..0) R/W 
 
--- *** TO DO:
--- base+32: link_id(5..0) R/W 
--- base+36: slot_id(3..0) R/W 
--- base+40: crate_id(9..0) R/W 
--- base+44: detector_id(5..0) R/W 
--- base+48: version_id(5..0) R/W 
--- base+52: threshold(13..0) R/W 
+-- starting at [base+64] we have a block of 40 14-bit registers
+-- with threshold values for each channel (default is 0x0800)
+-- this is used for SELF TRIG mode only.
+-- NOTE: to DISABLE a channel set the threshold to max (0x3FFF)
+
+-- starting at [base+256] we have a block of 32 6-bit registers
+-- used to control the input mux network for the STREAMING MODE
+-- senders. See stream_core for details on what these values do.
 
 library ieee;
 use ieee.std_logic_1164.all;
@@ -32,15 +35,21 @@ use ieee.numeric_std.all;
 use work.daphne3_package.all;
 
 entity stuff is
+generic( version: std_logic_vector(27 downto 0) ); -- GIT version number passed in from top level generic
 port(
     fan_tach: in  std_logic_vector(1 downto 0); -- fan tach speed monitoring
+    
     fan_ctrl: out std_logic; -- pwm speed control common to both fans
     hvbias_en: out std_logic; -- high = high voltage bias generator is ON
     mux_en: out std_logic_vector(1 downto 0); -- analog mux enables
     mux_a: out std_logic_vector(1 downto 0); -- analog mux selects
     stat_led: out std_logic_vector(5 downto 0); -- general purpose LEDs
-    version: in std_logic_vector(27 downto 0); -- GIT version number
-    core_chan_enable: out std_logic_vector(39 downto 0); -- channel enables for self-trig core
+    threshold: out array_40x14_type; -- for self-trig mode
+    mux_ctrl: out array_4x8x6_type; -- for streaming mode
+    slot_id: out std_logic_vector(3 downto 0);
+    crate_id: out std_logic_vector(9 downto 0);
+    detector_id: out std_logic_vector(5 downto 0);
+    version_id: out std_logic_vector(5 downto 0);
   
     -- AXI-LITE interface
 
@@ -106,6 +115,13 @@ architecture stuff_arch of stuff is
     signal mux_a_reg, mux_en_reg: std_logic_vector(1 downto 0) := "00";
     signal core_enable_reg: std_logic_vector(39 downto 0) := DEFAULT_core_enable;
 
+    signal mux_ctrl_reg:    array_4x8x6_type; -- block of 32 registers
+
+    signal slot_id_reg:     std_logic_vector(3 downto 0);
+    signal crate_id_reg:    std_logic_vector(9 downto 0);
+    signal detector_id_reg: std_logic_vector(5 downto 0);
+    signal version_id_reg:  std_logic_vector(5 downto 0); -- different from GIT version
+
     -- register offsets are relative to the base address specified for this AXI-LITE slave instance
 
     constant FANCTRL_OFFSET:    std_logic_vector(5 downto 0) := "000000"; -- base+0
@@ -116,8 +132,48 @@ architecture stuff_arch of stuff is
     constant MUXA_OFFSET:       std_logic_vector(5 downto 0) := "010100"; -- base+20
     constant LED_OFFSET:        std_logic_vector(5 downto 0) := "011000"; -- base+24
     constant VER_OFFSET:        std_logic_vector(5 downto 0) := "011100"; -- base+28
-    constant CORE_EN_LO_OFFSET: std_logic_vector(5 downto 0) := "100000"; -- base+32
-    constant CORE_EN_HI_OFFSET: std_logic_vector(5 downto 0) := "100100"; -- base+36
+    
+    constant SLOT_ID_OFFSET:       std_logic_vector(5 downto 0) := "100100"; -- base+40
+    constant CRATE_ID_OFFSET:      std_logic_vector(5 downto 0) := "100100"; -- base+44
+    constant DETECTOR_ID_OFFSET:   std_logic_vector(5 downto 0) := "100100"; -- base+48
+    constant VERSION_ID_OFFSET:    std_logic_vector(5 downto 0) := "100100"; -- base+52
+
+    constant MUX_CTRL_00_OFFSET:   std_logic_vector(5 downto 0) := "100100"; -- base+64
+    constant MUX_CTRL_01_OFFSET:   std_logic_vector(5 downto 0) := "100100"; -- base+68
+    constant MUX_CTRL_02_OFFSET:   std_logic_vector(5 downto 0) := "100100"; -- base+72
+    constant MUX_CTRL_03_OFFSET:   std_logic_vector(5 downto 0) := "100100"; -- base+76
+    constant MUX_CTRL_04_OFFSET:   std_logic_vector(5 downto 0) := "100100"; -- base+80
+    constant MUX_CTRL_05_OFFSET:   std_logic_vector(5 downto 0) := "100100"; -- base+84
+    constant MUX_CTRL_06_OFFSET:   std_logic_vector(5 downto 0) := "100100"; -- base+64
+    constant MUX_CTRL_07_OFFSET:   std_logic_vector(5 downto 0) := "100100"; -- base+64
+
+    constant MUX_CTRL_10_OFFSET:   std_logic_vector(5 downto 0) := "100100"; -- base+64
+    constant MUX_CTRL_11_OFFSET:   std_logic_vector(5 downto 0) := "100100"; -- base+64
+    constant MUX_CTRL_12_OFFSET:   std_logic_vector(5 downto 0) := "100100"; -- base+64
+    constant MUX_CTRL_13_OFFSET:   std_logic_vector(5 downto 0) := "100100"; -- base+64
+    constant MUX_CTRL_14_OFFSET:   std_logic_vector(5 downto 0) := "100100"; -- base+64
+    constant MUX_CTRL_15_OFFSET:   std_logic_vector(5 downto 0) := "100100"; -- base+64
+    constant MUX_CTRL_16_OFFSET:   std_logic_vector(5 downto 0) := "100100"; -- base+64
+    constant MUX_CTRL_17_OFFSET:   std_logic_vector(5 downto 0) := "100100"; -- base+64
+
+    constant MUX_CTRL_20_OFFSET:   std_logic_vector(5 downto 0) := "100100"; -- base+64
+    constant MUX_CTRL_21_OFFSET:   std_logic_vector(5 downto 0) := "100100"; -- base+64
+    constant MUX_CTRL_22_OFFSET:   std_logic_vector(5 downto 0) := "100100"; -- base+64
+    constant MUX_CTRL_23_OFFSET:   std_logic_vector(5 downto 0) := "100100"; -- base+64
+    constant MUX_CTRL_24_OFFSET:   std_logic_vector(5 downto 0) := "100100"; -- base+64
+    constant MUX_CTRL_25_OFFSET:   std_logic_vector(5 downto 0) := "100100"; -- base+64
+    constant MUX_CTRL_26_OFFSET:   std_logic_vector(5 downto 0) := "100100"; -- base+64
+    constant MUX_CTRL_27_OFFSET:   std_logic_vector(5 downto 0) := "100100"; -- base+64
+
+    constant MUX_CTRL_30_OFFSET:   std_logic_vector(5 downto 0) := "100100"; -- base+64
+    constant MUX_CTRL_31_OFFSET:   std_logic_vector(5 downto 0) := "100100"; -- base+64
+    constant MUX_CTRL_32_OFFSET:   std_logic_vector(5 downto 0) := "100100"; -- base+64
+    constant MUX_CTRL_33_OFFSET:   std_logic_vector(5 downto 0) := "100100"; -- base+64
+    constant MUX_CTRL_34_OFFSET:   std_logic_vector(5 downto 0) := "100100"; -- base+64
+    constant MUX_CTRL_35_OFFSET:   std_logic_vector(5 downto 0) := "100100"; -- base+64
+    constant MUX_CTRL_36_OFFSET:   std_logic_vector(5 downto 0) := "100100"; -- base+64
+    constant MUX_CTRL_37_OFFSET:   std_logic_vector(5 downto 0) := "100100"; -- base+64
+
 
 begin
 
