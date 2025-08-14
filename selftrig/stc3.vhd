@@ -27,12 +27,7 @@ use xpm.vcomponents.all;
 entity stc3 is
 generic( baseline_runlength: integer := 256 ); -- options 32, 64, 128, or 256
 port(
-    link_id: std_logic_vector(5 downto 0);
     ch_id: std_logic_vector(5 downto 0);
-    slot_id: std_logic_vector(3 downto 0);
-    crate_id: std_logic_vector(9 downto 0);
-    detector_id: std_logic_vector(5 downto 0);
-    version_id: std_logic_vector(5 downto 0);
     threshold: std_logic_vector(9 downto 0); -- counts relative calculated avg baseline
 
     clock: in std_logic; -- master clock 62.5MHz

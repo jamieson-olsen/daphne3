@@ -16,13 +16,7 @@ architecture st40_top_testbench_arch of st40_top_testbench is
 component st40_top
 generic( baseline_runlength: integer := 256 );
 port(
-    link_id: std_logic_vector(5 downto 0);
-    slot_id: in std_logic_vector(3 downto 0);
-    crate_id: in std_logic_vector(9 downto 0);
-    detector_id: in std_logic_vector(5 downto 0);
-    version_id: in std_logic_vector(5 downto 0);
     threshold: in std_logic_vector(9 downto 0);
-
     clock: in std_logic; -- main clock 62.5 MHz
     reset: in std_logic;
     timestamp: in std_logic_vector(63 downto 0);
@@ -73,11 +67,6 @@ end process transactor;
 DUT: st40_top
 generic map ( baseline_runlength => 64 )
 port map(
-    link_id => "000001",
-    slot_id => "0011",
-    crate_id => "0000100100",
-    detector_id => "100000",
-    version_id => "001100",
     threshold => "1000000000", -- threshold is 512 counts above calculated baseline
     clock => clock,
     reset => reset,

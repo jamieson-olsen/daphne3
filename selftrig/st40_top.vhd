@@ -17,11 +17,6 @@ use work.daphne3_package.all;
 entity st40_top is
 generic( baseline_runlength: integer := 256 ); -- options 32, 64, 128, or 256
 port(
-    link_id: std_logic_vector(5 downto 0);
-    slot_id: in std_logic_vector(3 downto 0);
-    crate_id: in std_logic_vector(9 downto 0);
-    detector_id: in std_logic_vector(5 downto 0);
-    version_id: in std_logic_vector(5 downto 0);
     threshold: in std_logic_vector(9 downto 0); -- counts relative to the calculated baseline
 
     clock: in std_logic; -- main clock 62.5 MHz
@@ -51,14 +46,8 @@ architecture st40_top_arch of st40_top is
     component stc3 is
     generic( baseline_runlength: integer := 256 ); -- options 32, 64, 128, or 256
     port(
-        link_id: std_logic_vector(5 downto 0);
         ch_id: std_logic_vector(5 downto 0);
-        slot_id: std_logic_vector(3 downto 0);
-        crate_id: std_logic_vector(9 downto 0);
-        detector_id: std_logic_vector(5 downto 0);
-        version_id: std_logic_vector(5 downto 0);
         threshold: std_logic_vector(9 downto 0); -- trig threshold relative to calculated baseline
-
         clock: in std_logic; -- master clock 62.5MHz
         reset: in std_logic;
         enable: in std_logic;
@@ -80,14 +69,8 @@ begin
             stc3_inst: stc3
             generic map ( baseline_runlength => baseline_runlength )
             port map(   
-                link_id => link_id,
                 ch_id => std_logic_vector( to_unsigned(i,6) ),
-                slot_id => slot_id,
-                crate_id => crate_id,
-                detector_id => detector_id,
-                version_id => version_id,
                 threshold => threshold,
-
                 clock => clock,
                 reset => reset,
                 enable => enable(i),
