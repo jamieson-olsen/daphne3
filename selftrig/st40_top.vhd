@@ -152,11 +152,12 @@ begin
     outreg_proc: process(clock)
     begin
         if rising_edge(clock) then
-            d0 <= fifo_dout_mux(63 downto 0); -- strip off marker byte
 
             if ( state=dump ) then
+                d0 <= fifo_dout_mux(63 downto 0); -- note strip off marker byte
                 d0_valid <= '1';
             else
+                d0 <= (others=>'0'); -- do a better job masking off the data bus while switching between STC3 modules
                 d0_valid <= '0';
             end if;
 
