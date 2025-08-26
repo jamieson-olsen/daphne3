@@ -18,6 +18,7 @@ entity st40_top is
 generic( baseline_runlength: integer := 256 ); -- options 32, 64, 128, or 256
 port(
     threshold: in std_logic_vector(9 downto 0); -- counts relative to the calculated baseline
+    version: in std_logic_vector(3 downto 0);
 
     clock: in std_logic; -- main clock 62.5 MHz
     reset: in std_logic;
@@ -46,7 +47,8 @@ architecture st40_top_arch of st40_top is
     component stc3 is
     generic( baseline_runlength: integer := 256 ); -- options 32, 64, 128, or 256
     port(
-        ch_id: std_logic_vector(5 downto 0);
+        ch_id: std_logic_vector(7 downto 0);
+        version: std_logic_vector(3 downto 0);    
         threshold: std_logic_vector(9 downto 0); -- trig threshold relative to calculated baseline
         clock: in std_logic; -- master clock 62.5MHz
         reset: in std_logic;
@@ -69,7 +71,8 @@ begin
             stc3_inst: stc3
             generic map ( baseline_runlength => baseline_runlength )
             port map(   
-                ch_id => std_logic_vector( to_unsigned(i,6) ),
+                ch_id => std_logic_vector( to_unsigned(i,8) ),  -- now 8 bits
+                version => version,
                 threshold => threshold,
                 clock => clock,
                 reset => reset,

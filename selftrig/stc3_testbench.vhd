@@ -17,7 +17,8 @@ architecture stc3_testbench_arch of stc3_testbench is
 component stc3 is
 generic( baseline_runlength: integer := 256 ); -- options 32, 64, 128, or 256
 port(
-    ch_id: std_logic_vector(5 downto 0);
+    ch_id: std_logic_vector(7 downto 0);
+    version: std_logic_vector(3 downto 0);
     threshold: std_logic_vector(9 downto 0); -- counts relative to calculated avg baseline
     clock: in std_logic; -- master clock 62.5MHz
     reset: in std_logic;   
@@ -75,7 +76,8 @@ end process forcetrigproc;
 DUT: stc3
 generic map( baseline_runlength => 64 ) 
 port map(
-    ch_id => "100001",
+    ch_id => "00100001",
+    version => "1010",
     threshold => "1000000000", -- theshold is 512 counts above baseline
     clock => clock,
     reset => reset,

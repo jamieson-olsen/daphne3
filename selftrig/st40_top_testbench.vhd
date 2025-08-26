@@ -17,6 +17,7 @@ component st40_top
 generic( baseline_runlength: integer := 256 );
 port(
     threshold: in std_logic_vector(9 downto 0);
+    version: in std_logic_vector(3 downto 0);
     clock: in std_logic; -- main clock 62.5 MHz
     reset: in std_logic;
     timestamp: in std_logic_vector(63 downto 0);
@@ -67,6 +68,7 @@ end process transactor;
 DUT: st40_top
 generic map ( baseline_runlength => 64 )
 port map(
+    version => "0101",
     threshold => "1000000000", -- threshold is 512 counts above calculated baseline
     clock => clock,
     reset => reset,
