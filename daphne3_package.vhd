@@ -9,6 +9,7 @@ package daphne3_package is
 
     type array_4x4_type is array (3 downto 0) of std_logic_vector(3 downto 0);
     type array_4x6_type is array (3 downto 0) of std_logic_vector(5 downto 0);
+    type array_4x8_type is array (3 downto 0) of std_logic_vector(7 downto 0);
     type array_4x14_type is array (3 downto 0) of std_logic_vector(13 downto 0);
     type array_4x32_type is array (3 downto 0) of std_logic_vector(31 downto 0);
     type array_4x64_type is array(3 downto 0) of std_logic_vector(63 downto 0);
@@ -17,14 +18,16 @@ package daphne3_package is
     type array_5x9_type is array (4 downto 0) of std_logic_vector(8 downto 0);
     type array_8x4_type is array (7 downto 0) of std_logic_vector(3 downto 0);
     type array_8x6_type is array(7 downto 0) of std_logic_vector(5 downto 0);
-    type array_8x14_type is array (7 downto 0) of std_logic_vector(13 downto 0);
-    type array_8x32_type is array (7 downto 0) of std_logic_vector(31 downto 0);
-    type array_9x14_type is array (8 downto 0) of std_logic_vector(13 downto 0);
-    type array_9x16_type is array (8 downto 0) of std_logic_vector(15 downto 0);
-    type array_9x32_type is array (8 downto 0) of std_logic_vector(31 downto 0);
-    type array_10x6_type is array (9 downto 0) of std_logic_vector(5 downto 0);
-    type array_10x14_type is array (9 downto 0) of std_logic_vector(13 downto 0);
-    type array_32x6_type is array (31 downto 0) of std_logic_vector(5 downto 0);
+    type array_8x14_type is array(7 downto 0) of std_logic_vector(13 downto 0);
+    type array_8x32_type is array(7 downto 0) of std_logic_vector(31 downto 0);
+    type array_8x64_type is array(7 downto 0) of std_logic_vector(63 downto 0);
+    type array_9x14_type is array(8 downto 0) of std_logic_vector(13 downto 0);
+    type array_9x16_type is array(8 downto 0) of std_logic_vector(15 downto 0);
+    type array_9x32_type is array(8 downto 0) of std_logic_vector(31 downto 0);
+    type array_10x6_type is array(9 downto 0) of std_logic_vector(5 downto 0);
+    type array_10x14_type is array(9 downto 0) of std_logic_vector(13 downto 0);
+    type array_20x14_type is array(19 downto 0) of std_logic_vector(13 downto 0);
+    type array_32x6_type is array(31 downto 0) of std_logic_vector(5 downto 0);
     type array_40x14_type is array(39 downto 0) of std_logic_vector(13 downto 0);
     type array_40x16_type is array(39 downto 0) of std_logic_vector(15 downto 0);
     type array_40x64_type is array(39 downto 0) of std_logic_vector(63 downto 0);
@@ -41,26 +44,37 @@ package daphne3_package is
     type array_5x9x14_type is array (4 downto 0) of array_9x14_type;
     type array_5x9x16_type is array (4 downto 0) of array_9x16_type;
     type array_5x9x32_type is array (4 downto 0) of array_9x32_type;
+    type array_8x4x8_type is array(7 downto 0) of array_4x8_type;
+    type array_8x4x14_type is array(7 downto 0) of array_4x14_type;
 
-    -- default values for self trigger output record header fields
+    -- use records to simplify AXI Lite I/O
 
-    constant DEFAULT_link_id:     std_logic_vector(5 downto 0) := "000000";
-    constant DEFAULT_slot_id:     std_logic_vector(3 downto 0) := "0010";
-    constant DEFAULT_crate_id:    std_logic_vector(9 downto 0) := "0000000011";
-    constant DEFAULT_detector_id: std_logic_vector(5 downto 0) := "000010";
-    constant DEFAULT_version_id:  std_logic_vector(5 downto 0) := "000011";
+    type AXILITE_INREC is record
+    	ACLK: std_logic;
+    	ARESETN: std_logic;
+    	AWADDR: std_logic_vector(31 downto 0);
+    	AWPROT: std_logic_vector(2 downto 0);
+    	AWVALID: std_logic;
+    	WDATA: std_logic_vector(31 downto 0);
+    	WSTRB: std_logic_vector(3 downto 0);
+    	WVALID: std_logic;
+    	BREADY: std_logic;
+    	ARADDR: std_logic_vector(31 downto 0);
+    	ARPROT: std_logic_vector(2 downto 0);
+    	ARVALID: std_logic;
+    	RREADY: std_logic;
+    end record AXILITE_INREC;
 
-    -- default values for self trigger algo
-
-    constant DEFAULT_threshold: std_logic_vector(13 downto 0) := "10000000000000";
-    constant DEFAULT_runlength: integer := 256;
-    constant DEFAULT_core_enable: std_logic_vector(39 downto 0) := X"0000000000";
-
-    -- default values for 10G Ethernet sender
-
-    constant DEFAULT_ext_mac_addr_0: std_logic_vector(47 downto 0)  := X"DEADBEEFCAFE"; -- Ethernet MAC address
-    constant DEFAULT_ext_ip_addr_0: std_logic_vector(31 downto 0)   := X"C0A80064"; -- Ethernet IP address 192.168.0.100
-    constant DEFAULT_ext_port_addr_0: std_logic_vector(15 downto 0) := X"1234"; -- Ethernet Port number
+    type AXILITE_OUTREC is record
+    	WREADY: std_logic;
+    	BRESP: std_logic_vector(1 downto 0);
+       	BVALID: std_logic;
+	    AWREADY: std_logic;
+    	ARREADY: std_logic;
+    	RDATA: std_logic_vector(31 downto 0);
+    	RRESP: std_logic_vector(1 downto 0);
+    	RVALID: std_logic;
+    end record AXILITE_OUTREC;
 
 end package;
 

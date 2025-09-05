@@ -27,10 +27,12 @@ use xpm.vcomponents.all;
 use work.daphne3_package.all;
 
 entity stream4 is
-generic( BLOCKS_PER_RECORD: integer := 64 ); 
+generic( BLOCKS_PER_RECORD: integer := 128 ); 
 port(
     clock: in std_logic;
     areset: in std_logic;
+    version: in std_logic_vector(3 downto 0);
+    channel_id: in array_4x8_type; 
     ts: in std_logic_vector(63 downto 0);
     din: array_4x14_type;
     dout:  out std_logic_vector(63 downto 0);
@@ -292,8 +294,12 @@ begin
                '1' when (state=data and FIFO_empty='0' and FIFO_dout(64)='0') else
                '0';
 
-    dout_i <= FIFO_dout(63 downto 0) when (state=header and wordcount=0) else -- this is the timestamp header word
-              FIFO_dout(63 downto 0) when (state=data and FIFO_empty='0' and FIFO_dout(64)='0') else -- normal data pass thru
+    dout_i <= FIFO_dout(63 downto 0)                       when (state=header and wordcount=0) else -- this is the timestamp header word
+              (channel_id(0) & version & X"0000000000000") when (state=header and wordcount=1) else -- ch0 header word
+              (channel_id(1) & version & X"0000000000000") when (state=header and wordcount=8) else -- ch1 header word
+              (channel_id(2) & version & X"0000000000000") when (state=header and wordcount=15) else -- ch2 header word
+              (channel_id(3) & version & X"0000000000000") when (state=header and wordcount=22) else -- ch3 header word
+              FIFO_dout(63 downto 0)                       when (state=data and FIFO_empty='0' and FIFO_dout(64)='0') else -- normal data pass thru
               (others=>'0');
 
     last_i <= '1' when (state=data and wordcount=((BLOCKS_PER_RECORD*7)-1) ) else '0';  -- 7 data words per block
