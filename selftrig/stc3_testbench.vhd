@@ -22,7 +22,6 @@ port(
     threshold: std_logic_vector(9 downto 0); -- counts relative to calculated avg baseline
     clock: in std_logic; -- master clock 62.5MHz
     reset: in std_logic;   
-    enable: in std_logic; 
     forcetrig: in std_logic;
     timestamp: in std_logic_vector(63 downto 0);
 	din: in std_logic_vector(13 downto 0); -- aligned AFE data
@@ -81,7 +80,6 @@ port map(
     threshold => "1000000000", -- theshold is 512 counts above baseline
     clock => clock,
     reset => reset,
-    enable => '1',
     forcetrig => '0',
     timestamp => ts,
 	din => din,

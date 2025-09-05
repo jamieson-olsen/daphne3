@@ -12,6 +12,8 @@
 -- the trigger module provided here is very basic and is intended as a placeholder
 -- to simulate a more advanced trigger which has a total latency of 64 clock cycles.
 
+-- enable input removed; just set threshold to all 1's to disable this module
+
 -- Jamieson Olsen <jamieson@fnal.gov>
 
 library ieee;
@@ -33,7 +35,6 @@ port(
 
     clock: in std_logic; -- master clock 62.5MHz
     reset: in std_logic;
-    enable: in std_logic;
     forcetrig: in std_logic; -- force a trigger
     timestamp: in std_logic_vector(63 downto 0);
 	din: in std_logic_vector(13 downto 0); -- aligned AFE data
@@ -64,6 +65,7 @@ signal FIFO_wr_en, FIFO_sleep: std_logic := '0';
 signal marker: std_logic_vector(7 downto 0) := X"00";
 signal prog_empty: std_logic;
 signal fifo_word_count: std_logic_vector(12 downto 0);
+signal enable: std_logic;
 
 component baseline
 generic( baseline_runlength: integer := 256 );
@@ -88,6 +90,10 @@ port(
 end component;
 
 begin
+
+-- to disable this sender, set threshold value to all 1s.
+
+enable <= '0' when (threshold="1111111111") else '1';
 
 -- assume trigger latency is 64 clocks
 -- + 64 pre-trigger samples = total delay is ~128 clocks
