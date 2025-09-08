@@ -24,7 +24,7 @@ use unisim.vcomponents.all;
 
 use work.daphne3_package.all;
 
-entity outspy64_axilite is
+entity outspybuff is
 	port (
 	    clock: IN std_logic ;
 	    trig: in std_logic ;
@@ -35,9 +35,9 @@ entity outspy64_axilite is
         AXI_IN: in AXILITE_INREC;
         AXI_OUT: out AXILITE_OUTREC
   	);
-end outspy64_axilite;
+end outspybuff;
 
-architecture outspy64_axilite_arch of outspy64_axilite is
+architecture outspybuff_arch of outspybuff is
 
 	signal axi_awaddr	: std_logic_vector(31 downto 0);
 	signal axi_awready	: std_logic;
@@ -643,5 +643,5 @@ port map (
 
 FORCE_TRIG <= trig_reg;
 
-end outspy64_axilite_arch;
+end outspybuff_arch;
 
