@@ -19,6 +19,8 @@ library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
 
+use work.daphne3_package.all;
+
 entity spim_dac is
 generic( CLKDIV: integer := 8 ); -- SPI sclk frequency = clock frequency / CLKDIV
 port(
@@ -26,30 +28,8 @@ port(
     dac_din: out std_logic;
     dac_sync_n: out std_logic;
     dac_ldac_n: out std_logic;
-  
-    -- AXI-LITE interface
-
-	S_AXI_ACLK	    : in std_logic; -- 100MHz
-	S_AXI_ARESETN	: in std_logic;
-	S_AXI_AWADDR	: in std_logic_vector(31 downto 0);
-	S_AXI_AWPROT	: in std_logic_vector(2 downto 0);
-	S_AXI_AWVALID	: in std_logic;
-	S_AXI_AWREADY	: out std_logic;
-	S_AXI_WDATA	    : in std_logic_vector(31 downto 0);
-	S_AXI_WSTRB	    : in std_logic_vector(3 downto 0);
-	S_AXI_WVALID	: in std_logic;
-	S_AXI_WREADY	: out std_logic;
-	S_AXI_BRESP	    : out std_logic_vector(1 downto 0);
-	S_AXI_BVALID	: out std_logic;
-	S_AXI_BREADY	: in std_logic;
-	S_AXI_ARADDR	: in std_logic_vector(31 downto 0);
-	S_AXI_ARPROT	: in std_logic_vector(2 downto 0);
-	S_AXI_ARVALID	: in std_logic;
-	S_AXI_ARREADY	: out std_logic;
-	S_AXI_RDATA	    : out std_logic_vector(31 downto 0);
-	S_AXI_RRESP	    : out std_logic_vector(1 downto 0);
-	S_AXI_RVALID	: out std_logic;
-	S_AXI_RREADY	: in std_logic
+    AXI_IN: in AXILITE_INREC;
+    AXI_OUT: out AXILITE_OUTREC  
   );
 end spim_dac;
 
@@ -89,10 +69,10 @@ begin
 
 -- FSM to shift serial data into the DACs
 
-fsm_proc: process(S_AXI_ACLK) 
+fsm_proc: process(AXI_IN.ACLK) 
 begin
-    if rising_edge(S_AXI_ACLK) then
-        if (S_AXI_ARESETN='0') then
+    if rising_edge(AXI_IN.ACLK) then
+        if (AXI_IN.ARESETN='0') then
             state <= rst;
         else
             case state is 
@@ -190,26 +170,26 @@ busy <= '0' when (state=idle) else
 
 -- AXI LITE slave logic (adapted from Xilinx IP generator AXI-LITE slave example)
 
-S_AXI_AWREADY <= axi_awready;
-S_AXI_WREADY <= axi_wready;
-S_AXI_BRESP	<= axi_bresp;
-S_AXI_BVALID <= axi_bvalid;
-S_AXI_ARREADY <= axi_arready;
-S_AXI_RDATA	<= axi_rdata;
-S_AXI_RRESP	<= axi_rresp;
-S_AXI_RVALID <= axi_rvalid;
+AXI_OUT.AWREADY <= axi_awready;
+AXI_OUT.WREADY <= axi_wready;
+AXI_OUT.BRESP	<= axi_bresp;
+AXI_OUT.BVALID <= axi_bvalid;
+AXI_OUT.ARREADY <= axi_arready;
+AXI_OUT.RDATA	<= axi_rdata;
+AXI_OUT.RRESP	<= axi_rresp;
+AXI_OUT.RVALID <= axi_rvalid;
 
-process (S_AXI_ACLK)
+process (AXI_IN.ACLK)
 begin
-  if rising_edge(S_AXI_ACLK) then 
-    if S_AXI_ARESETN = '0' then
+  if rising_edge(AXI_IN.ACLK) then 
+    if AXI_IN.ARESETN = '0' then
       axi_awready <= '0';
       aw_en <= '1';
     else
-      if (axi_awready = '0' and S_AXI_AWVALID = '1' and S_AXI_WVALID = '1' and aw_en = '1') then
+      if (axi_awready = '0' and AXI_IN.AWVALID = '1' and AXI_IN.WVALID = '1' and aw_en = '1') then
            axi_awready <= '1';
            aw_en <= '0';
-        elsif (S_AXI_BREADY = '1' and axi_bvalid = '1') then
+        elsif (AXI_IN.BREADY = '1' and axi_bvalid = '1') then
            aw_en <= '1';
            axi_awready <= '0';
       else
@@ -219,27 +199,27 @@ begin
   end if;
 end process;
 
-process (S_AXI_ACLK)
+process (AXI_IN.ACLK)
 begin
-  if rising_edge(S_AXI_ACLK) then 
-    if S_AXI_ARESETN = '0' then
+  if rising_edge(AXI_IN.ACLK) then 
+    if AXI_IN.ARESETN = '0' then
       axi_awaddr <= (others => '0');
     else
-      if (axi_awready = '0' and S_AXI_AWVALID = '1' and S_AXI_WVALID = '1' and aw_en = '1') then
+      if (axi_awready = '0' and AXI_IN.AWVALID = '1' and AXI_IN.WVALID = '1' and aw_en = '1') then
         -- Write Address latching
-        axi_awaddr <= S_AXI_AWADDR;
+        axi_awaddr <= AXI_IN.AWADDR;
       end if;
     end if;
   end if;                   
 end process; 
 
-process (S_AXI_ACLK)
+process (AXI_IN.ACLK)
 begin
-  if rising_edge(S_AXI_ACLK) then 
-    if S_AXI_ARESETN = '0' then
+  if rising_edge(AXI_IN.ACLK) then 
+    if AXI_IN.ARESETN = '0' then
       axi_wready <= '0';
     else
-      if (axi_wready = '0' and S_AXI_WVALID = '1' and S_AXI_AWVALID = '1' and aw_en = '1') then
+      if (axi_wready = '0' and AXI_IN.WVALID = '1' and AXI_IN.AWVALID = '1' and aw_en = '1') then
         
           axi_wready <= '1';
       else
@@ -249,13 +229,13 @@ begin
   end if;
 end process; 
 
-reg_wren <= axi_wready and S_AXI_WVALID and axi_awready and S_AXI_AWVALID ;
+reg_wren <= axi_wready and AXI_IN.WVALID and axi_awready and AXI_IN.AWVALID ;
 
-process (S_AXI_ACLK)
+process (AXI_IN.ACLK)
 begin
-  if rising_edge(S_AXI_ACLK) then 
+  if rising_edge(AXI_IN.ACLK) then 
 
-    if (S_AXI_ARESETN = '0') then
+    if (AXI_IN.ARESETN = '0') then
 
       dac0_reg <= (others=>'0');
       dac1_reg <= (others=>'0');
@@ -264,7 +244,7 @@ begin
 
     else
 
-      if (reg_wren = '1' and S_AXI_WSTRB = "1111") then
+      if (reg_wren = '1' and AXI_IN.WSTRB = "1111") then
 
         -- treat all of these register writes as if they are full 32 bits
         -- e.g. the four write strobe bits should be high
@@ -275,13 +255,13 @@ begin
             go_reg <= '1'; -- momentary to trigger FSM
 
           when DACDATA0_OFFSET => 
-            dac0_reg <= S_AXI_WDATA(15 downto 0);
+            dac0_reg <= AXI_IN.WDATA(15 downto 0);
 
           when DACDATA1_OFFSET => 
-            dac1_reg <= S_AXI_WDATA(15 downto 0);
+            dac1_reg <= AXI_IN.WDATA(15 downto 0);
 
           when DACDATA2_OFFSET => 
-            dac2_reg <= S_AXI_WDATA(15 downto 0);
+            dac2_reg <= AXI_IN.WDATA(15 downto 0);
 
           when others =>
             null;
@@ -297,33 +277,33 @@ begin
   end if;                   
 end process; 
 
-process (S_AXI_ACLK)
+process (AXI_IN.ACLK)
 begin
-  if rising_edge(S_AXI_ACLK) then 
-    if S_AXI_ARESETN = '0' then
+  if rising_edge(AXI_IN.ACLK) then 
+    if AXI_IN.ARESETN = '0' then
       axi_bvalid  <= '0';
       axi_bresp   <= "00"; 
     else
-      if (axi_awready = '1' and S_AXI_AWVALID = '1' and axi_wready = '1' and S_AXI_WVALID = '1' and axi_bvalid = '0'  ) then
+      if (axi_awready = '1' and AXI_IN.AWVALID = '1' and axi_wready = '1' and AXI_IN.WVALID = '1' and axi_bvalid = '0'  ) then
         axi_bvalid <= '1';
         axi_bresp  <= "00"; 
-      elsif (S_AXI_BREADY = '1' and axi_bvalid = '1') then
+      elsif (AXI_IN.BREADY = '1' and axi_bvalid = '1') then
         axi_bvalid <= '0';
       end if;
     end if;
   end if;                   
 end process; 
 
-process (S_AXI_ACLK)
+process (AXI_IN.ACLK)
 begin
-  if rising_edge(S_AXI_ACLK) then 
-    if S_AXI_ARESETN = '0' then
+  if rising_edge(AXI_IN.ACLK) then 
+    if AXI_IN.ARESETN = '0' then
       axi_arready <= '0';
       axi_araddr  <= (others => '1');
     else
-      if (axi_arready = '0' and S_AXI_ARVALID = '1') then
+      if (axi_arready = '0' and AXI_IN.ARVALID = '1') then
         axi_arready <= '1';
-        axi_araddr  <= S_AXI_ARADDR;           
+        axi_araddr  <= AXI_IN.ARADDR;           
       else
         axi_arready <= '0';
       end if;
@@ -331,24 +311,24 @@ begin
   end if;                   
 end process; 
 
-process (S_AXI_ACLK)
+process (AXI_IN.ACLK)
 begin
-  if rising_edge(S_AXI_ACLK) then
-    if S_AXI_ARESETN = '0' then
+  if rising_edge(AXI_IN.ACLK) then
+    if AXI_IN.ARESETN = '0' then
       axi_rvalid <= '0';
       axi_rresp  <= "00";
     else
-      if (axi_arready = '1' and S_AXI_ARVALID = '1' and axi_rvalid = '0') then
+      if (axi_arready = '1' and AXI_IN.ARVALID = '1' and axi_rvalid = '0') then
         axi_rvalid <= '1';
         axi_rresp  <= "00"; 
-      elsif (axi_rvalid = '1' and S_AXI_RREADY = '1') then
+      elsif (axi_rvalid = '1' and AXI_IN.RREADY = '1') then
         axi_rvalid <= '0';
       end if;            
     end if;
   end if;
 end process;
 
-reg_rden <= axi_arready and S_AXI_ARVALID and (not axi_rvalid) ;
+reg_rden <= axi_arready and AXI_IN.ARVALID and (not axi_rvalid) ;
 
 reg_data_out <= (X"0000000" & "000" & busy) when (axi_araddr(3 downto 0)=CTRLSTAT_OFFSET) else -- status register is just busy flag in LSb
                 (X"0000" & dac0_reg)        when (axi_araddr(3 downto 0)=DACDATA0_OFFSET) else
@@ -356,10 +336,10 @@ reg_data_out <= (X"0000000" & "000" & busy) when (axi_araddr(3 downto 0)=CTRLSTA
                 (X"0000" & dac2_reg)        when (axi_araddr(3 downto 0)=DACDATA2_OFFSET) else
                 X"00000000";
 
-process( S_AXI_ACLK ) is
+process( AXI_IN.ACLK ) is
 begin
-  if (rising_edge (S_AXI_ACLK)) then
-    if ( S_AXI_ARESETN = '0' ) then
+  if (rising_edge (AXI_IN.ACLK)) then
+    if ( AXI_IN.ARESETN = '0' ) then
       axi_rdata  <= (others => '0');
     else
       if (reg_rden = '1') then

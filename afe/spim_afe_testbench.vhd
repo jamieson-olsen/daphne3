@@ -61,57 +61,18 @@ port(
     offset_sync_n: out std_logic_vector(4 downto 0);
     offset_ldac_n: out std_logic_vector(4 downto 0);
 
-    S_AXI_ACLK: in std_logic;
-    S_AXI_ARESETN: in std_logic;
-    S_AXI_AWADDR: in std_logic_vector(31 downto 0);
-    S_AXI_AWPROT: in std_logic_vector(2 downto 0);
-    S_AXI_AWVALID: in std_logic;
-    S_AXI_AWREADY: out std_logic;
-    S_AXI_WDATA: in std_logic_vector(31 downto 0);
-    S_AXI_WSTRB: in std_logic_vector(3 downto 0);
-    S_AXI_WVALID: in std_logic;
-    S_AXI_WREADY: out std_logic;
-    S_AXI_BRESP: out std_logic_vector(1 downto 0);
-    S_AXI_BVALID: out std_logic;
-    S_AXI_BREADY: in std_logic;
-    S_AXI_ARADDR: in std_logic_vector(31 downto 0);
-    S_AXI_ARPROT: in std_logic_vector(2 downto 0);
-    S_AXI_ARVALID: in std_logic;
-    S_AXI_ARREADY: out std_logic;
-    S_AXI_RDATA: out std_logic_vector(31 downto 0);
-    S_AXI_RRESP: out std_logic_vector(1 downto 0);
-    S_AXI_RVALID: out std_logic;
-    S_AXI_RREADY: in std_logic
+    AXI_IN: in AXILITE_INREC; 
+    AXI_OUT: out AXILITE_OUTREC 
+
   );
 end component;
 
--- AXI master -> slave signals
+signal AXI_IN: AXILITE_INREC := (ACLK=>'0', ARESETN=>'0', AWADDR=>X"00000000", 
+    AWPROT=>"000", AWVALID=>'0', WDATA=>X"00000000", WSTRB=>"0000", WVALID=>'0', 
+    BREADY=>'0', ARADDR=>X"00000000", ARPROT=>"000", ARVALID=>'0', RREADY=>'0');
+signal AXI_OUT: AXILITE_OUTREC;
 
-signal S_AXI_ACLK: std_logic := '0';
-constant S_AXI_ACLK_period: time := 10.0ns;  -- 100 MHz
-signal S_AXI_ARESETN: std_logic := '0'; -- start off with AXI bus in reset
-signal S_AXI_AWADDR: std_logic_vector(31 downto 0) := (others=>'0');
-signal S_AXI_AWPROT: std_logic_vector(2 downto 0) := (others=>'0');
-signal S_AXI_AWVALID: std_logic := '0';
-signal S_AXI_WDATA: std_logic_vector(31 downto 0) := (others=>'0');
-signal S_AXI_WSTRB: std_logic_vector(3 downto 0) := (others=>'0');
-signal S_AXI_WVALID: std_logic := '0';
-signal S_AXI_BREADY: std_logic := '0';
-signal S_AXI_ARADDR: std_logic_vector(31 downto 0) := (others=>'0');
-signal S_AXI_ARPROT: std_logic_vector(2 downto 0) := (others=>'0');
-signal S_AXI_ARVALID: std_logic := '0';
-signal S_AXI_RREADY: std_logic := '0';
-
--- AXI slave -> master signals
-
-signal S_AXI_AWREADY: std_logic;
-signal S_AXI_WREADY: std_logic;
-signal S_AXI_BRESP: std_logic_vector(1 downto 0);
-signal S_AXI_BVALID: std_logic;
-signal S_AXI_ARREADY: std_logic;
-signal S_AXI_RDATA: std_logic_vector(31 downto 0);
-signal S_AXI_RRESP: std_logic_vector(1 downto 0);
-signal S_AXI_RVALID: std_logic;
+constant ACLK_period: time := 10.0ns;  -- 100 MHz
 
 signal afe_rst, afe_pdn: std_logic;
 
@@ -405,72 +366,54 @@ port map(
     offset_sync_n => offset_sync_n,
     offset_ldac_n => offset_ldac_n,
 
-    S_AXI_ACLK    => S_AXI_ACLK,
-    S_AXI_ARESETN => S_AXI_ARESETN,
-    S_AXI_AWADDR  => S_AXI_AWADDR,
-    S_AXI_AWPROT  => S_AXI_AWPROT,
-    S_AXI_AWVALID => S_AXI_AWVALID,
-    S_AXI_AWREADY => S_AXI_AWREADY,
-    S_AXI_WDATA   => S_AXI_WDATA,
-    S_AXI_WSTRB   => S_AXI_WSTRB,
-    S_AXI_WVALID  => S_AXI_WVALID,
-    S_AXI_WREADY  => S_AXI_WREADY, 
-    S_AXI_BRESP   => S_AXI_BRESP,
-    S_AXI_BVALID  => S_AXI_BVALID,
-    S_AXI_BREADY  => S_AXI_BREADY,
-    S_AXI_ARADDR  => S_AXI_ARADDR,
-    S_AXI_ARPROT  => S_AXI_ARPROT,
-    S_AXI_ARVALID => S_AXI_ARVALID,
-    S_AXI_ARREADY => S_AXI_ARREADY,
-    S_AXI_RDATA   => S_AXI_RDATA,
-    S_AXI_RRESP   => S_AXI_RRESP,
-    S_AXI_RVALID  => S_AXI_RVALID,
-    S_AXI_RREADY  => S_AXI_RREADY
+    AXI_IN => AXI_IN,
+    AXI_OUT => AXI_OUT
+
   );
 
 -- now we simulate the AXI-LITE master doing reads and writes...
 
-S_AXI_ACLK <= not S_AXI_ACLK after S_AXI_ACLK_period/2;
+AXI_IN.ACLK <= not AXI_IN.ACLK after ACLK_period/2;
 
 aximaster_proc: process
 
 procedure axipoke( constant addr: in std_logic_vector;
                    constant data: in std_logic_vector ) is
 begin
-    wait until rising_edge(S_AXI_ACLK);
-    S_AXI_AWADDR <= addr;
-    S_AXI_AWVALID <= '1';
-    S_AXI_WDATA <= data;
-    S_AXI_WVALID <= '1';
-    S_AXI_BREADY <= '1';
-    S_AXI_WSTRB <= "1111";
-    wait until (rising_edge(S_AXI_ACLK) and S_AXI_AWREADY='1' and S_AXI_WREADY='1');
-    S_AXI_AWADDR <= X"00000000";
-    S_AXI_AWVALID <= '0';
-    S_AXI_WDATA <= X"00000000";
-    S_AXI_AWVALID <= '0';
-    S_AXI_WSTRB <= "0000";
-    wait until (rising_edge(S_AXI_ACLK) and S_AXI_BVALID='1');
-    S_AXI_BREADY <= '0';
+    wait until rising_edge(AXI_IN.ACLK);
+    AXI_IN.AWADDR <= addr;
+    AXI_IN.AWVALID <= '1';
+    AXI_IN.WDATA <= data;
+    AXI_IN.WVALID <= '1';
+    AXI_IN.BREADY <= '1';
+    AXI_IN.WSTRB <= "1111";
+    wait until (rising_edge(AXI_IN.ACLK) and AXI_OUT.AWREADY='1' and AXI_OUT.WREADY='1');
+    AXI_IN.AWADDR <= X"00000000";
+    AXI_IN.AWVALID <= '0';
+    AXI_IN.WDATA <= X"00000000";
+    AXI_IN.AWVALID <= '0';
+    AXI_IN.WSTRB <= "0000";
+    wait until (rising_edge(AXI_IN.ACLK) and AXI_OUT.BVALID='1');
+    AXI_IN.BREADY <= '0';
 end procedure axipoke;
 
 procedure axipeek( constant addr: in std_logic_vector ) is
 begin
-    wait until rising_edge(S_AXI_ACLK);
-    S_AXI_ARADDR <= addr;
-    S_AXI_ARVALID <= '1';
-    S_AXI_RREADY <= '1';
-    wait until (rising_edge(S_AXI_ACLK) and S_AXI_ARREADY='1');
-    S_AXI_ARADDR <= X"00000000";
-    S_AXI_ARVALID <= '0';
-    wait until (rising_edge(S_AXI_ACLK) and S_AXI_RVALID='1');
-    S_AXI_RREADY <= '0';
+    wait until rising_edge(AXI_IN.ACLK);
+    AXI_IN.ARADDR <= addr;
+    AXI_IN.ARVALID <= '1';
+    AXI_IN.RREADY <= '1';
+    wait until (rising_edge(AXI_IN.ACLK) and AXI_OUT.ARREADY='1');
+    AXI_IN.ARADDR <= X"00000000";
+    AXI_IN.ARVALID <= '0';
+    wait until (rising_edge(AXI_IN.ACLK) and AXI_OUT.RVALID='1');
+    AXI_IN.RREADY <= '0';
 end procedure axipeek;
 
 begin
 
 wait for 500ns;
-S_AXI_ARESETN <= '1'; -- release AXI reset
+AXI_IN.ARESETN <= '1'; -- release AXI reset
 
 wait for 500ns;
 axipoke(addr => X"00000000", data => X"00000003"); -- power down all AFEs and hard reset all AFEs

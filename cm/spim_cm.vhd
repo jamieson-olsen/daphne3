@@ -1,4 +1,4 @@
--- spim_cm.vhd
+-- spim_cm.vhd  (this is a work in progress!)
 --
 -- spi master for current monitor (ADS1261IRHBT)
 --
@@ -30,6 +30,8 @@ library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
 
+use work.daphne3_package.all;
+
 entity spim_cm is
 port(
     cm_sclk: out std_logic; -- max 10MHz
@@ -37,30 +39,8 @@ port(
     cm_din: out std_logic;
     cm_dout: in std_logic;
     cm_drdyn: in std_logic;
-
-    -- AXI-LITE interface
-
-    S_AXI_ACLK	    : in std_logic; -- 100MHz
-    S_AXI_ARESETN	: in std_logic;
-	S_AXI_AWADDR	: in std_logic_vector(31 downto 0);
-	S_AXI_AWPROT	: in std_logic_vector(2 downto 0);
-	S_AXI_AWVALID	: in std_logic;
-	S_AXI_AWREADY	: out std_logic;
-	S_AXI_WDATA	    : in std_logic_vector(31 downto 0);
-	S_AXI_WSTRB	    : in std_logic_vector(3 downto 0);
-	S_AXI_WVALID	: in std_logic;
-	S_AXI_WREADY	: out std_logic;
-	S_AXI_BRESP	    : out std_logic_vector(1 downto 0);
-	S_AXI_BVALID	: out std_logic;
-	S_AXI_BREADY	: in std_logic;
-	S_AXI_ARADDR	: in std_logic_vector(31 downto 0);
-	S_AXI_ARPROT	: in std_logic_vector(2 downto 0);
-	S_AXI_ARVALID	: in std_logic;
-	S_AXI_ARREADY	: out std_logic;
-	S_AXI_RDATA	    : out std_logic_vector(31 downto 0);
-	S_AXI_RRESP	    : out std_logic_vector(1 downto 0);
-	S_AXI_RVALID	: out std_logic;
-	S_AXI_RREADY	: in std_logic
+    AXI_IN: in AXILITE_INREC;
+    AXI_OUT: out AXILITE_OUTREC 
   );
 end spim_cm;
 
@@ -96,6 +76,6 @@ begin
 --          Store byte in OUTPUT FIFO
 --  End SPI sequence
 
-
+-- ummm.... where is the code?!?
 
 end spim_cm_arch;

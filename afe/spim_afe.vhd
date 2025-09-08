@@ -46,6 +46,8 @@ library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
 
+use work.daphne3_package.all;
+
 entity spim_afe is
 port(
 
@@ -70,29 +72,8 @@ port(
     offset_sync_n: out std_logic_vector(4 downto 0);
     offset_ldac_n: out std_logic_vector(4 downto 0);
 
-    -- AXI-LITE interface
-
-	S_AXI_ACLK	    : in std_logic; -- 100MHz
-	S_AXI_ARESETN	: in std_logic;
-	S_AXI_AWADDR	: in std_logic_vector(31 downto 0);
-	S_AXI_AWPROT	: in std_logic_vector(2 downto 0);
-	S_AXI_AWVALID	: in std_logic;
-	S_AXI_AWREADY	: out std_logic;
-	S_AXI_WDATA	    : in std_logic_vector(31 downto 0);
-	S_AXI_WSTRB	    : in std_logic_vector(3 downto 0);
-	S_AXI_WVALID	: in std_logic;
-	S_AXI_WREADY	: out std_logic;
-	S_AXI_BRESP	    : out std_logic_vector(1 downto 0);
-	S_AXI_BVALID	: out std_logic;
-	S_AXI_BREADY	: in std_logic;
-	S_AXI_ARADDR	: in std_logic_vector(31 downto 0);
-	S_AXI_ARPROT	: in std_logic_vector(2 downto 0);
-	S_AXI_ARVALID	: in std_logic;
-	S_AXI_ARREADY	: out std_logic;
-	S_AXI_RDATA	    : out std_logic_vector(31 downto 0);
-	S_AXI_RRESP	    : out std_logic_vector(1 downto 0);
-	S_AXI_RVALID	: out std_logic;
-	S_AXI_RREADY	: in std_logic
+    AXI_IN: in AXILITE_INREC;
+    AXI_OUT: out AXILITE_OUTREC
   );
 end spim_afe;
 
@@ -179,23 +160,23 @@ constant OFFS4_OFFSET:    std_logic_vector(5 downto 0) := std_logic_vector( to_u
 
 begin
 
-reset <= not S_AXI_ARESETN;
+reset <= not AXI_IN.ARESETN;
 
 GenSpim: for i in 4 downto 0 generate
 
     afe_inst: spim_afe1 -- SPI master for AFE
     generic map( CLKDIV => 8 )
-    port map( clock => S_AXI_ACLK, reset => reset, din => S_AXI_WDATA(23 downto 0), we => afe_we(i), dout => afe_dout(i), busy => afe_busy(i),
+    port map( clock => AXI_IN.ACLK, reset => reset, din => AXI_IN.WDATA(23 downto 0), we => afe_we(i), dout => afe_dout(i), busy => afe_busy(i),
               sclk => afe_sclk(i), sen => afe_sen(i), mosi => afe_mosi(i), miso => afe_miso(i) );
     
     afe_trim_inst: spim_dac2 -- SPI master for 2 trim DACs
     generic map( CLKDIV => 8 )
-    port map( clock => S_AXI_ACLK, reset => reset, din => S_AXI_WDATA, we => trim_we(i), busy => trim_busy(i),
+    port map( clock => AXI_IN.ACLK, reset => reset, din => AXI_IN.WDATA, we => trim_we(i), busy => trim_busy(i),
               sclk => trim_sclk(i), mosi => trim_mosi(i), ldac_n => trim_ldac_n(i), sync_n => trim_sync_n(i) );
     
     afe_offset_inst: spim_dac2 -- SPI master for 2 offset DACs
     generic map( CLKDIV => 8 )
-    port map( clock => S_AXI_ACLK, reset => reset, din => S_AXI_WDATA, we => offset_we(i), busy => offset_busy(i),
+    port map( clock => AXI_IN.ACLK, reset => reset, din => AXI_IN.WDATA, we => offset_we(i), busy => offset_busy(i),
               sclk => offset_sclk(i), mosi => offset_mosi(i), ldac_n => offset_ldac_n(i), sync_n => offset_sync_n(i) );
 
 end generate GenSpim;
@@ -219,26 +200,26 @@ busy34 <= afe_busy(3) or trim_busy(3) or offset_busy(3) or afe_busy(4) or trim_b
 
 -- AXI LITE slave logic (adapted from Xilinx IP generator AXI-LITE slave example)
 
-S_AXI_AWREADY <= axi_awready;
-S_AXI_WREADY <= axi_wready;
-S_AXI_BRESP	<= axi_bresp;
-S_AXI_BVALID <= axi_bvalid;
-S_AXI_ARREADY <= axi_arready;
-S_AXI_RDATA	<= axi_rdata;
-S_AXI_RRESP	<= axi_rresp;
-S_AXI_RVALID <= axi_rvalid;
+AXI_OUT.AWREADY <= axi_awready;
+AXI_OUT.WREADY <= axi_wready;
+AXI_OUT.BRESP	<= axi_bresp;
+AXI_OUT.BVALID <= axi_bvalid;
+AXI_OUT.ARREADY <= axi_arready;
+AXI_OUT.RDATA	<= axi_rdata;
+AXI_OUT.RRESP	<= axi_rresp;
+AXI_OUT.RVALID <= axi_rvalid;
 
-process (S_AXI_ACLK)
+process (AXI_IN.ACLK)
 begin
-  if rising_edge(S_AXI_ACLK) then 
-    if S_AXI_ARESETN = '0' then
+  if rising_edge(AXI_IN.ACLK) then 
+    if AXI_IN.ARESETN = '0' then
       axi_awready <= '0';
       aw_en <= '1';
     else
-      if (axi_awready = '0' and S_AXI_AWVALID = '1' and S_AXI_WVALID = '1' and aw_en = '1') then
+      if (axi_awready = '0' and AXI_IN.AWVALID = '1' and AXI_IN.WVALID = '1' and aw_en = '1') then
            axi_awready <= '1';
            aw_en <= '0';
-        elsif (S_AXI_BREADY = '1' and axi_bvalid = '1') then
+        elsif (AXI_IN.BREADY = '1' and axi_bvalid = '1') then
            aw_en <= '1';
            axi_awready <= '0';
       else
@@ -248,27 +229,27 @@ begin
   end if;
 end process;
 
-process (S_AXI_ACLK)
+process (AXI_IN.ACLK)
 begin
-  if rising_edge(S_AXI_ACLK) then 
-    if S_AXI_ARESETN = '0' then
+  if rising_edge(AXI_IN.ACLK) then 
+    if AXI_IN.ARESETN = '0' then
       axi_awaddr <= (others => '0');
     else
-      if (axi_awready = '0' and S_AXI_AWVALID = '1' and S_AXI_WVALID = '1' and aw_en = '1') then
+      if (axi_awready = '0' and AXI_IN.AWVALID = '1' and AXI_IN.WVALID = '1' and aw_en = '1') then
         -- Write Address latching
-        axi_awaddr <= S_AXI_AWADDR;
+        axi_awaddr <= AXI_IN.AWADDR;
       end if;
     end if;
   end if;                   
 end process; 
 
-process (S_AXI_ACLK)
+process (AXI_IN.ACLK)
 begin
-  if rising_edge(S_AXI_ACLK) then 
-    if S_AXI_ARESETN = '0' then
+  if rising_edge(AXI_IN.ACLK) then 
+    if AXI_IN.ARESETN = '0' then
       axi_wready <= '0';
     else
-      if (axi_wready = '0' and S_AXI_WVALID = '1' and S_AXI_AWVALID = '1' and aw_en = '1') then
+      if (axi_wready = '0' and AXI_IN.WVALID = '1' and AXI_IN.AWVALID = '1' and aw_en = '1') then
         
           axi_wready <= '1';
       else
@@ -278,22 +259,22 @@ begin
   end if;
 end process; 
 
-reg_wren <= axi_wready and S_AXI_WVALID and axi_awready and S_AXI_AWVALID ;
+reg_wren <= axi_wready and AXI_IN.WVALID and axi_awready and AXI_IN.AWVALID ;
 
-process (S_AXI_ACLK) -- register write logic
+process (AXI_IN.ACLK) -- register write logic
 begin
-  if rising_edge(S_AXI_ACLK) then 
-    if (S_AXI_ARESETN = '0') then
+  if rising_edge(AXI_IN.ACLK) then 
+    if (AXI_IN.ARESETN = '0') then
       afe_rst_reg <= '0';
       afe_pd_reg <= '0';
     else
-      if (reg_wren = '1' and S_AXI_WSTRB = "1111") then
+      if (reg_wren = '1' and AXI_IN.WSTRB = "1111") then
         -- treat all of these register writes as if they are full 32 bits
         -- e.g. the four write strobe bits should be high
         case ( axi_awaddr(5 downto 0) ) is
           when CTRLSTAT_OFFSET => 
-            afe_rst_reg <= S_AXI_WDATA(0); 
-            afe_pd_reg <= S_AXI_WDATA(1); 
+            afe_rst_reg <= AXI_IN.WDATA(0); 
+            afe_pd_reg <= AXI_IN.WDATA(1); 
           when others =>
             null;
         end case;
@@ -304,51 +285,51 @@ end process;
 
 -- make the write enable signals for various modules. this is similar to writing to a simple register
 
-afe_we(0) <= '1' when (reg_wren='1' and S_AXI_WSTRB="1111" and axi_awaddr(5 downto 0)=AFE0_OFFSET) else '0';
-afe_we(1) <= '1' when (reg_wren='1' and S_AXI_WSTRB="1111" and axi_awaddr(5 downto 0)=AFE1_OFFSET) else '0';
-afe_we(2) <= '1' when (reg_wren='1' and S_AXI_WSTRB="1111" and axi_awaddr(5 downto 0)=AFE2_OFFSET) else '0';
-afe_we(3) <= '1' when (reg_wren='1' and S_AXI_WSTRB="1111" and axi_awaddr(5 downto 0)=AFE3_OFFSET) else '0';
-afe_we(4) <= '1' when (reg_wren='1' and S_AXI_WSTRB="1111" and axi_awaddr(5 downto 0)=AFE4_OFFSET) else '0';
+afe_we(0) <= '1' when (reg_wren='1' and AXI_IN.WSTRB="1111" and axi_awaddr(5 downto 0)=AFE0_OFFSET) else '0';
+afe_we(1) <= '1' when (reg_wren='1' and AXI_IN.WSTRB="1111" and axi_awaddr(5 downto 0)=AFE1_OFFSET) else '0';
+afe_we(2) <= '1' when (reg_wren='1' and AXI_IN.WSTRB="1111" and axi_awaddr(5 downto 0)=AFE2_OFFSET) else '0';
+afe_we(3) <= '1' when (reg_wren='1' and AXI_IN.WSTRB="1111" and axi_awaddr(5 downto 0)=AFE3_OFFSET) else '0';
+afe_we(4) <= '1' when (reg_wren='1' and AXI_IN.WSTRB="1111" and axi_awaddr(5 downto 0)=AFE4_OFFSET) else '0';
 
-offset_we(0) <= '1' when (reg_wren='1' and S_AXI_WSTRB="1111" and axi_awaddr(5 downto 0)=OFFS0_OFFSET) else '0';
-offset_we(1) <= '1' when (reg_wren='1' and S_AXI_WSTRB="1111" and axi_awaddr(5 downto 0)=OFFS1_OFFSET) else '0';
-offset_we(2) <= '1' when (reg_wren='1' and S_AXI_WSTRB="1111" and axi_awaddr(5 downto 0)=OFFS2_OFFSET) else '0';
-offset_we(3) <= '1' when (reg_wren='1' and S_AXI_WSTRB="1111" and axi_awaddr(5 downto 0)=OFFS3_OFFSET) else '0';
-offset_we(4) <= '1' when (reg_wren='1' and S_AXI_WSTRB="1111" and axi_awaddr(5 downto 0)=OFFS4_OFFSET) else '0';
+offset_we(0) <= '1' when (reg_wren='1' and AXI_IN.WSTRB="1111" and axi_awaddr(5 downto 0)=OFFS0_OFFSET) else '0';
+offset_we(1) <= '1' when (reg_wren='1' and AXI_IN.WSTRB="1111" and axi_awaddr(5 downto 0)=OFFS1_OFFSET) else '0';
+offset_we(2) <= '1' when (reg_wren='1' and AXI_IN.WSTRB="1111" and axi_awaddr(5 downto 0)=OFFS2_OFFSET) else '0';
+offset_we(3) <= '1' when (reg_wren='1' and AXI_IN.WSTRB="1111" and axi_awaddr(5 downto 0)=OFFS3_OFFSET) else '0';
+offset_we(4) <= '1' when (reg_wren='1' and AXI_IN.WSTRB="1111" and axi_awaddr(5 downto 0)=OFFS4_OFFSET) else '0';
 
-trim_we(0) <= '1' when (reg_wren='1' and S_AXI_WSTRB="1111" and axi_awaddr(5 downto 0)=TRIM0_OFFSET) else '0';
-trim_we(1) <= '1' when (reg_wren='1' and S_AXI_WSTRB="1111" and axi_awaddr(5 downto 0)=TRIM1_OFFSET) else '0';
-trim_we(2) <= '1' when (reg_wren='1' and S_AXI_WSTRB="1111" and axi_awaddr(5 downto 0)=TRIM2_OFFSET) else '0';
-trim_we(3) <= '1' when (reg_wren='1' and S_AXI_WSTRB="1111" and axi_awaddr(5 downto 0)=TRIM3_OFFSET) else '0';
-trim_we(4) <= '1' when (reg_wren='1' and S_AXI_WSTRB="1111" and axi_awaddr(5 downto 0)=TRIM4_OFFSET) else '0';
+trim_we(0) <= '1' when (reg_wren='1' and AXI_IN.WSTRB="1111" and axi_awaddr(5 downto 0)=TRIM0_OFFSET) else '0';
+trim_we(1) <= '1' when (reg_wren='1' and AXI_IN.WSTRB="1111" and axi_awaddr(5 downto 0)=TRIM1_OFFSET) else '0';
+trim_we(2) <= '1' when (reg_wren='1' and AXI_IN.WSTRB="1111" and axi_awaddr(5 downto 0)=TRIM2_OFFSET) else '0';
+trim_we(3) <= '1' when (reg_wren='1' and AXI_IN.WSTRB="1111" and axi_awaddr(5 downto 0)=TRIM3_OFFSET) else '0';
+trim_we(4) <= '1' when (reg_wren='1' and AXI_IN.WSTRB="1111" and axi_awaddr(5 downto 0)=TRIM4_OFFSET) else '0';
 
-process (S_AXI_ACLK)
+process (AXI_IN.ACLK)
 begin
-  if rising_edge(S_AXI_ACLK) then 
-    if S_AXI_ARESETN = '0' then
+  if rising_edge(AXI_IN.ACLK) then 
+    if AXI_IN.ARESETN = '0' then
       axi_bvalid  <= '0';
       axi_bresp   <= "00"; 
     else
-      if (axi_awready = '1' and S_AXI_AWVALID = '1' and axi_wready = '1' and S_AXI_WVALID = '1' and axi_bvalid = '0'  ) then
+      if (axi_awready = '1' and AXI_IN.AWVALID = '1' and axi_wready = '1' and AXI_IN.WVALID = '1' and axi_bvalid = '0'  ) then
         axi_bvalid <= '1';
         axi_bresp  <= "00"; 
-      elsif (S_AXI_BREADY = '1' and axi_bvalid = '1') then
+      elsif (AXI_IN.BREADY = '1' and axi_bvalid = '1') then
         axi_bvalid <= '0';
       end if;
     end if;
   end if;                   
 end process; 
 
-process (S_AXI_ACLK)
+process (AXI_IN.ACLK)
 begin
-  if rising_edge(S_AXI_ACLK) then 
-    if S_AXI_ARESETN = '0' then
+  if rising_edge(AXI_IN.ACLK) then 
+    if AXI_IN.ARESETN = '0' then
       axi_arready <= '0';
       axi_araddr  <= (others => '1');
     else
-      if (axi_arready = '0' and S_AXI_ARVALID = '1') then
+      if (axi_arready = '0' and AXI_IN.ARVALID = '1') then
         axi_arready <= '1';
-        axi_araddr  <= S_AXI_ARADDR;           
+        axi_araddr  <= AXI_IN.ARADDR;           
       else
         axi_arready <= '0';
       end if;
@@ -356,24 +337,24 @@ begin
   end if;                   
 end process; 
 
-process (S_AXI_ACLK)
+process (AXI_IN.ACLK)
 begin
-  if rising_edge(S_AXI_ACLK) then
-    if S_AXI_ARESETN = '0' then
+  if rising_edge(AXI_IN.ACLK) then
+    if AXI_IN.ARESETN = '0' then
       axi_rvalid <= '0';
       axi_rresp  <= "00";
     else
-      if (axi_arready = '1' and S_AXI_ARVALID = '1' and axi_rvalid = '0') then
+      if (axi_arready = '1' and AXI_IN.ARVALID = '1' and axi_rvalid = '0') then
         axi_rvalid <= '1';
         axi_rresp  <= "00"; 
-      elsif (axi_rvalid = '1' and S_AXI_RREADY = '1') then
+      elsif (axi_rvalid = '1' and AXI_IN.RREADY = '1') then
         axi_rvalid <= '0';
       end if;            
     end if;
   end if;
 end process;
 
-reg_rden <= axi_arready and S_AXI_ARVALID and (not axi_rvalid) ;
+reg_rden <= axi_arready and AXI_IN.ARVALID and (not axi_rvalid) ;
 
 -- note DAC registers are write only, will return 0 if attempt to read back.
 
@@ -385,10 +366,10 @@ reg_data_out <= (X"000000" & "000" & busy34 & busy12 & busy0 & afe_pd_reg & afe_
                 (X"00" & afe_dout(4)) when (axi_araddr(5 downto 0)=AFE4_OFFSET) else
                 X"00000000";
 
-process( S_AXI_ACLK ) is
+process( AXI_IN.ACLK ) is
 begin
-  if (rising_edge (S_AXI_ACLK)) then
-    if ( S_AXI_ARESETN = '0' ) then
+  if (rising_edge (AXI_IN.ACLK)) then
+    if ( AXI_IN.ARESETN = '0' ) then
       axi_rdata  <= (others => '0');
     else
       if (reg_rden = '1') then
