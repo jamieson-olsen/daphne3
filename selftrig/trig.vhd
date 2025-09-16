@@ -63,7 +63,7 @@ begin
     -- current_sample ABOVE trig_thresh
     -- prev_sample BELOW trig_thresh
 
-    triggered_i <= '1' when ( current_sample>trig_thresh and prev_sample<trig_thresh ) else '0';
+    triggered_i <= '1' when ( current_sample>trig_thresh and prev_sample<=trig_thresh ) else '0';
 
     -- add in some fake/synthetic latency, adjust it so total trigger latency is 64 clocks
 
