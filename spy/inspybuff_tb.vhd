@@ -16,6 +16,7 @@ end inspybuff_tb;
 architecture inspybuff_tb_arch of inspybuff_tb is
 
 component inspybuff
+    generic (FIFO_DEPTH: integer := 4096);  -- 2048, 4096, 8192, 16384
 	port (
 	    clock: in std_logic;
 	    din: in array_40x14_type; 
@@ -71,6 +72,7 @@ begin
 end process trig_proc;
 
 DUT: inspybuff
+generic map( FIFO_DEPTH => 4096)
 port map(
     clock => clock,
     din => din,

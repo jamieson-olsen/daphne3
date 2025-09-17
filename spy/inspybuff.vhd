@@ -21,6 +21,12 @@
 -- The first word you'll read is the lower 32 bits of the first 64-bit word, followed by the upper 32 bits,
 -- followed by the lower 32 bits of the next 64-bit word, etc. etc.
 -- (you can read less, that's ok, since the FIFO is flushed automatically next time it is armed).
+--
+-- The FIFO depth is controlled by the FIFO_DEPTH generic and will impact the number of BlockRAMs used here:
+-- 2048  = 1 36kbit BlockRAM
+-- 4096  = 2 36kbit BlockRAMs
+-- 8192  = 4 36kbit BlockRAMs
+-- 16384 = 8 36kbit BlockRAMs
 
 library ieee;
 use ieee.std_logic_1164.all;
@@ -35,6 +41,7 @@ use unisim.vcomponents.all;
 use work.daphne3_package.all;
 
 entity inspybuff is
+    generic (FIFO_DEPTH: integer := 4096);  -- 2048, 4096, 8192, 16384
 	port (
 	    clock: in std_logic; -- 62.5MHz
 	    din: in array_40x14_type; 
@@ -453,8 +460,9 @@ FIFO_din <= "00" & din_delayed64;
 
 status_word <= X"00000" & "00" & FIFO_empty & FIFO_full & "00" & sel_reg;
 
--- FIFO write side is 4k x 16 bits, read side is 4k x 16 bits
--- This FIFO is made from 2 36kbit BlockRAMs (not UltraRAM)
+-- FIFO read and write ports are 16 bits wide
+-- FIFO depth is controlled by generic FIFO_DEPTH
+-- This FIFO is made from 36kbit BlockRAMs (not UltraRAMs)
 
 xpm_fifo_async_inst : xpm_fifo_async
 generic map (
@@ -466,13 +474,13 @@ generic map (
      FIFO_MEMORY_TYPE => "block", 
      FIFO_READ_LATENCY => 1, 
      WRITE_DATA_WIDTH => 16, 
-     FIFO_WRITE_DEPTH => 4096, -- write = 4k x 16
+     FIFO_WRITE_DEPTH => FIFO_DEPTH,
      FULL_RESET_VALUE => 0, 
      PROG_EMPTY_THRESH => 10, 
      PROG_FULL_THRESH => 10, 
      --RD_DATA_COUNT_WIDTH => 10,
      --WR_DATA_COUNT_WIDTH => 10,  
-     READ_DATA_WIDTH => 16, -- read = 4k x 16
+     READ_DATA_WIDTH => 16,
      READ_MODE => "fwft",
      RELATED_CLOCKS => 0,
      SIM_ASSERT_CHK => 0,
