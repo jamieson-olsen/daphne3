@@ -4,19 +4,20 @@
 --    1. memory style interface replaced with FIFO style interface, just two addresses now!
 --    2. uses LAST and VALID to detect data, only store VALID data, 1024 words captured
 --    3. no longer stores pre-trigger samples (doesn't make sense with output data)
+--    4. select one of 8 output streams for capture
 --
--- address 0 = ARM the module by writing ANYTHING to this address
+-- address 0 = ARM the module by writing the output stream number (0-7) to this address
 --             reading this address will return the status of the state machine in the upper nibble
---             (search for state_nibble futher down in this file...)
+--             (search for state_nibble futher down in this file...) and the stream number in the lower 3 bits.
 --
 -- address 4 = FIFO data register (R/O) read the captured data (low 32 bits, then high 32 bits, then low, then high...) 
 --             1k 64-bit words are stored, so read this address 2048 times to get it all
 --
--- HOW TO USE IT: First, write anything to address 0. That will FLUSH the FIFO and ARM it.
--- Now you can poll the status by reading address 0. Initially it will be FULL=0 and EMPTY=1.
--- As the FIFO starts filling up you'll see FULL=0 EMPTY=0. Then when it's done capturing 1k words
--- you'll see FULL=1 EMPTY=0. Now you can read the captured data by reading address 1 up to 2048 times.
--- The first word you'll read is the lower 32 bits of the first 64-bit word, followed by the upper 32 bits,
+-- HOW TO USE IT: First, write the output stream number you want to capture (0-7) to address 0. That will FLUSH the FIFO and ARM it.
+-- Now you can poll the status by reading address 0. The status will be in the upper nibble of this 32 bit word.
+-- (to see what these four bits mean, search for state_nibble futher down in this file...)
+-- You can read the captured data by reading address 1 repeatedly. After this module has cycled through the
+-- all the states, then the first word you'll read is the lower 32 bits of the first 64-bit word, followed by the upper 32 bits,
 -- followed by the lower 32 bits of the next 64-bit word, etc. etc.
 -- (you can read less, that's ok, since the FIFO is flushed automatically next time it is armed).
 --
@@ -39,9 +40,9 @@ entity outspybuff is
     generic( FIFO_DEPTH: integer := 1024 );  -- 1024, 2048, 4096, 8192
 	port (
 	    clock: in std_logic; -- 62.5MHz clock
-	    din: in std_logic_vector(63 downto 0); -- tap off signals going to HERMES sender IP
-	    valid: in std_logic;
-	    last: in std_logic;
+	    din: in array_8x64_type; -- tap off signals going to HERMES sender IP
+	    valid: in std_logic_vector(7 downto 0);
+	    last: in std_logic_vector(7 downto 0);
         AXI_IN: in AXILITE_INREC;  
         AXI_OUT: out AXILITE_OUTREC
   	);
@@ -69,6 +70,10 @@ architecture outspybuff_arch of outspybuff is
     signal arm_axi_reg: std_logic_vector(1 downto 0) := "00";
     signal reset_reg: std_logic := '1';
     signal arm_reg: std_logic := '0';
+
+    signal sel_reg: std_logic_vector(2 downto 0) := "000";
+    signal din_mux: std_logic_vector(63 downto 0);
+    signal last_mux, valid_mux: std_logic;
 
     signal FIFO_empty, FIFO_full, FIFO_wr_en, FIFO_rd_en, FIFO_rst: std_logic;
     signal FIFO_dout: std_logic_vector(31 downto 0);
@@ -176,10 +181,12 @@ begin
   if rising_edge(AXI_IN.ACLK) then 
     if (AXI_IN.ARESETN = '0') then 
         arm_axi_reg <= "00";
+        sel_reg <= "000";
     else
       if (reg_wren = '1' and AXI_IN.WSTRB = "1111") then
         if (axi_awaddr(3 downto 0)="0000") then  -- just wrote to address 0
             arm_axi_reg(0) <= '1';
+            sel_reg <= AXI_IN.WDATA(2 downto 0); 
         end if;
       else
         arm_axi_reg(0) <= '0';
@@ -297,6 +304,35 @@ end process;
 
 -- end of axilite glue logic
 
+-- input mux switching
+
+din_mux <= din(0) when (sel_reg="000") else
+           din(1) when (sel_reg="001") else
+           din(2) when (sel_reg="010") else
+           din(3) when (sel_reg="011") else
+           din(4) when (sel_reg="100") else
+           din(5) when (sel_reg="101") else
+           din(6) when (sel_reg="110") else
+           din(7);
+
+last_mux <= last(0) when (sel_reg="000") else
+            last(1) when (sel_reg="001") else
+            last(2) when (sel_reg="010") else
+            last(3) when (sel_reg="011") else
+            last(4) when (sel_reg="100") else
+            last(5) when (sel_reg="101") else
+            last(6) when (sel_reg="110") else
+            last(7);
+
+valid_mux <= valid(0) when (sel_reg="000") else
+             valid(1) when (sel_reg="001") else
+             valid(2) when (sel_reg="010") else
+             valid(3) when (sel_reg="011") else
+             valid(4) when (sel_reg="100") else
+             valid(5) when (sel_reg="101") else
+             valid(6) when (sel_reg="110") else
+             valid(7);
+
 -- FSM controls the FIFO write side signals
 -- it is armed by the AXI side
 
@@ -345,7 +381,7 @@ end process;
                         end if;                      
  
                     when wait4last => -- wait until the end of previous record seen
-                        if (last='1') then
+                        if (last_mux='1') then
                             state <= store;
                         else
                             state <= wait4last;
@@ -366,7 +402,7 @@ end process;
         end if;
     end process fsm_proc;
 
-FIFO_wr_en <= '1' when (state=store and valid='1') else '0';
+FIFO_wr_en <= '1' when (state=store and valid_mux='1') else '0';
 
 FIFO_rd_en <= '1' when (reg_rden='1' and AXI_IN.ARADDR(3 downto 0)="0100") else '0';  -- read address 4
 
@@ -382,7 +418,7 @@ state_nibble <= "0001" when (state=rst) else -- in reset
                 "0110" when (state=store) else -- saw the END, now storing valid data but the FIFO is not yet full
                 "0000";
 
-status_word <= state_nibble & X"0000000";
+status_word <= state_nibble & X"000000" & '0' & sel_reg;
 
 -- FIFO write side is 64 x 1k deep, read side is 32 x 2k
 -- This FIFO is made from 36kbit BlockRAMs (not UltraRAM)
@@ -402,7 +438,7 @@ generic map (
      PROG_FULL_THRESH => 10, 
      -- RD_DATA_COUNT_WIDTH => 10, 
      -- WR_DATA_COUNT_WIDTH => 10, 
-     READ_DATA_WIDTH => 32, -- read port  x32
+     READ_DATA_WIDTH => 32, -- read port x32
      READ_MODE => "fwft",
      RELATED_CLOCKS => 0,
      SIM_ASSERT_CHK => 0,
@@ -428,7 +464,7 @@ port map (
      wr_ack => open,
      wr_data_count => open,
      wr_rst_busy => open,
-     din => din,
+     din => din_mux,
      injectdbiterr => '0',
      injectsbiterr => '0',
      rd_clk => AXI_IN.ACLK,

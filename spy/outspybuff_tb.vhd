@@ -1,4 +1,5 @@
--- testbench for a single output spy buffer with axi lite interface
+-- testbench for new output spy buffer with axi lite interface
+-- pick 1 of 8 output streams
 -- jamieson olsen <jamieson@fnal.gov>
 
 library ieee;
@@ -18,9 +19,9 @@ architecture outspybuff_tb_arch of outspybuff_tb is
 component outspybuff
 	port (
 	    clock: in std_logic;
-	    din: in std_logic_vector(63 downto 0);
-	    valid: in std_logic;
-	    last: in std_logic;
+	    din: in array_8x64_type;
+	    valid: in std_logic_vector(7 downto 0);
+	    last: in std_logic_vector(7 downto 0);
         AXI_IN: in AXILITE_INREC;  
         AXI_OUT: out AXILITE_OUTREC
   	);
@@ -29,7 +30,8 @@ end component;
 constant clock_period: time := 16.0ns;  -- 62.5 MHz
 signal clock: std_logic := '0';
 signal din: std_logic_vector(63 downto 0) := (others=>'0');
-signal valid, last: std_logic := '0';
+signal din_array: array_8x64_type;
+signal valid, last: std_logic_vector(7 downto 0) := X"00";
 
 signal AXI_IN: AXILITE_INREC := (ACLK=>'0', ARESETN=>'0', AWADDR=>X"00000000", 
     AWPROT=>"000", AWVALID=>'0', WDATA=>X"00000000", WSTRB=>"0000", WVALID=>'0', 
@@ -42,32 +44,36 @@ begin
 
 clock <= not clock after clock_period/2;
 
-fakesender_proc: process -- some dumb repeating thing
+fakesender_proc: process -- some dumb repeating thing, all 8 streams are the same...
 begin
     wait for 500ns;
 
     for i in 0 to 255 loop
         wait until rising_edge(clock);
         din <= X"DEADBEEF" & std_logic_vector( to_unsigned(i+437,32) );
-        valid <= '1'; 
+        valid <= X"FF"; 
         if (i=255) then
-            last <= '1';
+            last <= X"FF";
         else
-            last <= '0';
+            last <= X"00";
         end if;       
     end loop;
 
     wait until rising_edge(clock);
-    last <= '0';
-    valid <= '0';
+    last <= X"00";
+    valid <= X"00";
     din <= (others=>'0');
 
 end process fakesender_proc;
 
+dingen: for i in 7 downto 0 generate
+  din_array(i) <= din;
+end generate dingen;
+
 DUT: outspybuff
 port map(
     clock => clock,
-    din => din,
+    din => din_array,
     valid => valid,
     last => last,
     AXI_IN => AXI_IN,
@@ -118,19 +124,19 @@ begin
 wait for 100ns;
 AXI_IN.ARESETN <= '1'; -- release AXI reset
 wait for 1us;
-axipoke(addr => X"00000000", data => X"DEADBEEF"); -- arm it
+axipoke(addr => X"00000000", data => X"00000000"); -- arm it, select stream 0 for capture
 wait for 1us;
 axipeek(addr => X"00000000"); -- poll status register
 wait for 22us;
 axipeek(addr => X"00000000"); -- poll status register
 wait for 200ns;
-axipeek(addr => X"00000004");
+axipeek(addr => X"00000004"); -- read captured data, sample0, low word
 wait for 200ns;
-axipeek(addr => X"00000004");
+axipeek(addr => X"00000004"); -- read captured data, sample0, high word
 wait for 200ns;
-axipeek(addr => X"00000004");
+axipeek(addr => X"00000004"); -- read captured data, sample1, low word
 wait for 200ns;
-axipeek(addr => X"00000004");
+axipeek(addr => X"00000004"); -- etc. etc.
 wait for 200ns;
 axipeek(addr => X"00000004");
 wait for 200ns;
