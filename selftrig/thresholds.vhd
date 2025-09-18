@@ -1,8 +1,17 @@
 -- thresholds.vhd
 -- For DAPHNE self triggered sender
 -- 40-10 bit registers for storing threshold values 
--- these registers are R/W from AXI-LITE 
+-- this block of 10-bit registers is R/W from AXI-LITE 
 -- Jamieson Olsen <jamieson@fnal.gov>
+-- 
+-- Register         Address
+-- threshold0       base+0
+-- threshold1       base+4
+-- threshold2       base+8
+-- threshold3       base+12
+-- ...
+-- threshold39      base+156
+--
 
 library ieee;
 use ieee.std_logic_1164.all;

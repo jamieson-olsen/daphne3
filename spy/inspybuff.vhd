@@ -6,23 +6,23 @@
 --    3. 4k samples deep, with 64 pre-trigger samples
 --
 -- address 0 = ARM the module by writing the CHANNEL NUMBER (0-39) to this address
---             reading this address will return the 32 bit status word: 
---             X"000000" & FIFO_empty & FIFO_full & ChannelNumber(5 downto 0)
+--             reading this address will return the status of the state machine in the upper nibble
+--             (search for state_nibble further down in this file) and the current channel number
+--             in the lower 6 bits.
 --
--- address 1 = FIFO data register (R/O) read the captured data one sample at a time
---             read this address 4096 times to get it all. since axi-lite reads are 32 bits
---             and the samples are only 14 bits, you will read "0000 0000 0000 0000 00 " & data(13..0)
+-- address 4 = FIFO data register (R/O) read the captured data one sample at a time
+--             read this register repeatedly to get it all.
 --
 -- HOW TO USE IT: First, write the channel numberto address 0. That will FLUSH the FIFO and ARM it.
--- Now you can poll the status by reading address 0. Initially it will be FULL=0 and EMPTY=1.
--- Once it is armed this module will wait for the trigger signal. It will store
--- As the FIFO starts filling up you'll see FULL=0 EMPTY=0. Then when it's done capturing 1k words
--- you'll see FULL=1 EMPTY=0. Now you can read the captured data by reading address 1 up to 2048 times.
--- The first word you'll read is the lower 32 bits of the first 64-bit word, followed by the upper 32 bits,
--- followed by the lower 32 bits of the next 64-bit word, etc. etc.
--- (you can read less, that's ok, since the FIFO is flushed automatically next time it is armed).
+-- Now you can poll the status by reading address 0. The upper nibble will indicate which state this module is in.
+-- Once it is armed this module will wait for the trigger signal, then it will store 64 pre-trigger samples
+-- and keep storing data until the FIFO is full. Then it will return to idle and wait to be armed again.
+-- Now you can read the captured data by reading address 1 repeatedly. Reading this register will return
+-- a 32 bit word that has a single 14 bit sample in bits 13..0. You don't have to read out the entire FIFO since 
+-- it gets flushed each time it is armed.
 --
 -- The FIFO depth is controlled by the FIFO_DEPTH generic and will impact the number of BlockRAMs used here:
+--
 -- 2048  = 1 36kbit BlockRAM
 -- 4096  = 2 36kbit BlockRAMs
 -- 8192  = 4 36kbit BlockRAMs
@@ -83,7 +83,7 @@ architecture inspybuff_arch of inspybuff is
     signal counter: integer range 0 to 63 := 0;
     type state_type is (rst, wait4arm, fifo_clear, fifo_wait, wait4trig, store);
     signal state: state_type := rst;
-    
+    signal state_nibble: std_logic_vector(3 downto 0) := "0000";   
 
 begin
 
@@ -185,9 +185,9 @@ begin
         sel_reg <= "000000";
     else
       if (reg_wren = '1' and AXI_IN.WSTRB = "1111") then
-        if (axi_awaddr=X"00000000") then  -- just wrote to address 0
+        if (axi_awaddr(3 downto 0)="0000") then -- write addr 0
             arm_axi_reg(0) <= '1';
-            sel_reg <= AXI_IN.WDATA(5 downto 0);  -- store the target channel number
+            sel_reg <= AXI_IN.WDATA(5 downto 0); -- store the target channel number
         end if;
       else
         arm_axi_reg(0) <= '0';
@@ -281,8 +281,8 @@ end process;
 
 reg_rden <= axi_arready and AXI_IN.ARVALID and (not axi_rvalid) ;
 
-reg_data_out <= status_word         when (axi_araddr=X"00000000") else 
-                X"0000" & FIFO_dout when (axi_araddr=X"00000001") else 
+reg_data_out <= status_word         when (axi_araddr(3 downto 0)="0000") else -- read reg 0
+                X"0000" & FIFO_dout when (axi_araddr(3 downto 0)="0100") else -- read reg 4
                 (others =>'0');
 
 -- Output register or memory read data
@@ -452,13 +452,23 @@ end generate gendelay;
 
 FIFO_wr_en <= '1' when (state=store) else '0';
 
-FIFO_rd_en <= '1' when (reg_rden='1' and AXI_IN.ARADDR=X"00000001") else '0';
+FIFO_rd_en <= '1' when (reg_rden='1' and AXI_IN.ARADDR(3 downto 0)="0100") else '0'; -- read address 4
 
 FIFO_rst <= '1' when (state=fifo_clear) else '0';
 
 FIFO_din <= "00" & din_delayed64;
 
-status_word <= X"00000" & "00" & FIFO_empty & FIFO_full & "00" & sel_reg;
+-- these four bits reflect the current state
+
+state_nibble <= "0001" when (state=rst) else -- in reset
+                "0010" when (state=wait4arm) else -- idle; waiting to be armed by the user
+                "0011" when (state=fifo_clear) else -- flushing the FIFO
+                "0100" when (state=fifo_wait) else -- pause after FIFO flush
+                "0101" when (state=wait4trig) else -- waiting to be triggered 
+                "0110" when (state=store) else -- capturing data but the FIFO is not yet FULL
+                "0000";
+
+status_word <= state_nibble & X"00000" & "00" & sel_reg;
 
 -- FIFO read and write ports are 16 bits wide
 -- FIFO depth is controlled by generic FIFO_DEPTH

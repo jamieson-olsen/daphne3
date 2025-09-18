@@ -3,17 +3,30 @@
 -- 40 input buses -> 8x4 output buses 
 -- 32 8-bit registers for control, these are R/W
 -- Jamieson Olsen <jamieson@fnal.gov>
-
+--
 -- base +  0 = select register for dout(0)(0)
 -- base +  4 = select register for dout(0)(1)
 -- base +  8 = select register for dout(0)(2)
 -- base + 12 = select register for dout(0)(3)
 -- base + 16 = select register for dout(1)(0)
+-- base + 20 = select register for dout(1)(1)
 -- ...
 -- base + 124 = select register for dout(7)(3)
-
+--
 -- the streaming senders need to know what channels they are 
 -- connected to, so this module also outputs the muxctrl_reg
+--
+-- some examples:
+--   connect output(0)(3) to input(27) --> write 0x1B to address base+12
+--   connect output(4)(2) to input(4) --> write 0x04 to address base+72
+--   generate random pattern on output(7)(1) --> write 0x2D to address base+116
+--   generate counter on output(5)(3) --> write 0x2C to address base+92
+--   turn off output(3)(2) --> write 0xFF to address base+56
+--
+-- (scroll down in this file to see what special test modes are supported)
+--
+-- remember: in the streaming mode sender this module determines what data is sent
+-- to the core. it does not control what the input spy buffers see!
 
 library ieee;
 use ieee.std_logic_1164.all;

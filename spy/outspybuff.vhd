@@ -6,9 +6,10 @@
 --    3. no longer stores pre-trigger samples (doesn't make sense with output data)
 --
 -- address 0 = ARM the module by writing ANYTHING to this address
---             reading this address will return the EMPTY and FULL FIFO flags
+--             reading this address will return the status of the state machine in the upper nibble
+--             (search for state_nibble futher down in this file...)
 --
--- address 1 = FIFO data register (R/O) read the captured data (low 32 bits, then high 32 bits, then low, then high...) 
+-- address 4 = FIFO data register (R/O) read the captured data (low 32 bits, then high 32 bits, then low, then high...) 
 --             1k 64-bit words are stored, so read this address 2048 times to get it all
 --
 -- HOW TO USE IT: First, write anything to address 0. That will FLUSH the FIFO and ARM it.
@@ -18,6 +19,12 @@
 -- The first word you'll read is the lower 32 bits of the first 64-bit word, followed by the upper 32 bits,
 -- followed by the lower 32 bits of the next 64-bit word, etc. etc.
 -- (you can read less, that's ok, since the FIFO is flushed automatically next time it is armed).
+--
+-- Capture depth is variable and will affect the number of BlockRAMs used
+-- FIFO_DEPTH = 1024 -->  2 36kbit BlockRAMs
+-- FIFO_DEPTH = 2048 -->  4 36kbit BlockRAMs
+-- FIFO_DEPTH = 4096 -->  8 36kbit BlockRAMs
+-- FIFO_DEPTH = 8192 --> 16 36kbit BlockRAMs
 
 library ieee;
 use ieee.std_logic_1164.all;
@@ -29,12 +36,12 @@ use xpm.vcomponents.all;
 use work.daphne3_package.all;
 
 entity outspybuff is
+    generic( FIFO_DEPTH: integer := 1024 );  -- 1024, 2048, 4096, 8192
 	port (
 	    clock: in std_logic; -- 62.5MHz clock
 	    din: in std_logic_vector(63 downto 0); -- tap off signals going to HERMES sender IP
 	    valid: in std_logic;
 	    last: in std_logic;
-
         AXI_IN: in AXILITE_INREC;  
         AXI_OUT: out AXILITE_OUTREC
   	);
@@ -70,6 +77,7 @@ architecture outspybuff_arch of outspybuff is
     signal word_count: integer range 0 to 1024 := 0;
     type state_type is (rst, wait4arm, fifo_clear, fifo_wait, wait4last, store);
     signal state: state_type := rst;
+    signal state_nibble: std_logic_vector(3 downto 0) := "0000";
 
 begin
 
@@ -170,7 +178,7 @@ begin
         arm_axi_reg <= "00";
     else
       if (reg_wren = '1' and AXI_IN.WSTRB = "1111") then
-        if (axi_awaddr=X"00000000") then  -- just wrote to address 0
+        if (axi_awaddr(3 downto 0)="0000") then  -- just wrote to address 0
             arm_axi_reg(0) <= '1';
         end if;
       else
@@ -265,8 +273,8 @@ end process;
 
 reg_rden <= axi_arready and AXI_IN.ARVALID and (not axi_rvalid) ;
 
-reg_data_out <= status_word when (axi_araddr=X"00000000") else 
-                fifo_dout   when (axi_araddr=X"00000001") else 
+reg_data_out <= status_word when (axi_araddr(3 downto 0)="0000") else -- addr 0
+                fifo_dout   when (axi_araddr(3 downto 0)="0100") else -- addr 4
                 (others =>'0');
 
 -- Output register or memory read data
@@ -339,19 +347,13 @@ end process;
                     when wait4last => -- wait until the end of previous record seen
                         if (last='1') then
                             state <= store;
-                            word_count <= 0;
                         else
                             state <= wait4last;
                         end if;
 
-                    when store => -- store the next N valid words
-                        if (valid='1') then
-                            if (word_count=1023) then
-                                state <= wait4arm;
-                            else
-                                state <= store;
-                                word_count <= word_count+1;
-                            end if;
+                    when store => -- store valid words until FIFO is full
+                        if (FIFO_full='1') then
+                            state <= wait4arm;
                         else
                             state <= store;
                         end if;
@@ -366,14 +368,24 @@ end process;
 
 FIFO_wr_en <= '1' when (state=store and valid='1') else '0';
 
-FIFO_rd_en <= '1' when (reg_rden='1' and AXI_IN.ARADDR=X"00000001") else '0';
+FIFO_rd_en <= '1' when (reg_rden='1' and AXI_IN.ARADDR(3 downto 0)="0100") else '0';  -- read address 4
 
 FIFO_rst <= '1' when (state=fifo_clear) else '0';
 
-status_word <= X"0000000" & "00" & FIFO_empty & FIFO_full; 
+-- these four status bits describe the current state of this spy buffer
+
+state_nibble <= "0001" when (state=rst) else -- in reset
+                "0010" when (state=wait4arm) else   -- idle; waiting to be armed by the user 
+                "0011" when (state=fifo_clear) else  -- flushing the FIFO
+                "0100" when (state=fifo_wait) else -- pause after flushing the FIFO
+                "0101" when (state=wait4last) else -- waiting to see the END of a record
+                "0110" when (state=store) else -- saw the END, now storing valid data but the FIFO is not yet full
+                "0000";
+
+status_word <= state_nibble & X"0000000";
 
 -- FIFO write side is 64 x 1k deep, read side is 32 x 2k
--- This FIFO is made from 2 36kbit BlockRAMs (not UltraRAM)
+-- This FIFO is made from 36kbit BlockRAMs (not UltraRAM)
 
 xpm_fifo_async_inst : xpm_fifo_async
 generic map (
@@ -384,28 +396,28 @@ generic map (
      EN_SIM_ASSERT_ERR => "warning", 
      FIFO_MEMORY_TYPE => "block", 
      FIFO_READ_LATENCY => 1, 
-     FIFO_WRITE_DEPTH => 1024, -- write = 1k x 64
+     FIFO_WRITE_DEPTH => FIFO_DEPTH, -- generic
      FULL_RESET_VALUE => 0, 
      PROG_EMPTY_THRESH => 10, 
      PROG_FULL_THRESH => 10, 
-     RD_DATA_COUNT_WIDTH => 10, 
-     READ_DATA_WIDTH => 32, -- read = 2k x 32
+     -- RD_DATA_COUNT_WIDTH => 10, 
+     -- WR_DATA_COUNT_WIDTH => 10, 
+     READ_DATA_WIDTH => 32, -- read port  x32
      READ_MODE => "fwft",
      RELATED_CLOCKS => 0,
      SIM_ASSERT_CHK => 0,
      USE_ADV_FEATURES => "0707", 
      WAKEUP_TIME => 0, 
-     WRITE_DATA_WIDTH => 64, 
-     WR_DATA_COUNT_WIDTH => 10 
-)
+     WRITE_DATA_WIDTH => 64 -- write port x64
+    )
 port map (
      almost_empty => open,
      almost_full => open,
      data_valid => open,
      dbiterr => open,
-     dout => fifo_dout,
-     empty => fifo_empty,
-     full => fifo_full,
+     dout => FIFO_dout,
+     empty => FIFO_empty,
+     full => FIFO_full,
      overflow => open,
      prog_empty => open,
      prog_full => open,

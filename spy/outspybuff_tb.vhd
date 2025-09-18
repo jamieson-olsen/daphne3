@@ -73,7 +73,7 @@ port map(
     AXI_IN => AXI_IN,
     AXI_OUT => AXI_OUT );
 
--- now do the axi stuff...
+-- now do the axi stuff... assume base address is 0....
 
 AXI_IN.ACLK <= not AXI_IN.ACLK after ACLK_period/2;
 
@@ -124,19 +124,19 @@ axipeek(addr => X"00000000"); -- poll status register
 wait for 22us;
 axipeek(addr => X"00000000"); -- poll status register
 wait for 200ns;
-axipeek(addr => X"00000001");
+axipeek(addr => X"00000004");
 wait for 200ns;
-axipeek(addr => X"00000001");
+axipeek(addr => X"00000004");
 wait for 200ns;
-axipeek(addr => X"00000001");
+axipeek(addr => X"00000004");
 wait for 200ns;
-axipeek(addr => X"00000001");
+axipeek(addr => X"00000004");
 wait for 200ns;
-axipeek(addr => X"00000001");
+axipeek(addr => X"00000004");
 wait for 200ns;
-axipeek(addr => X"00000001");
+axipeek(addr => X"00000004");
 wait for 200ns;
-axipeek(addr => X"00000001");
+axipeek(addr => X"00000004");
 wait;
 end process aximaster_proc;
 
