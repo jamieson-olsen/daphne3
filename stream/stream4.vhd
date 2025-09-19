@@ -14,6 +14,8 @@
 -- If BLOCKS_PER_RECORD is set too low, the header words begin to dominate
 -- the output bandwidth and data will start to back up in the FIFO.
 -- Minimum BLOCKS_PER_RECORD is about 30.
+--
+-- To disable this sender, set all four channel_id bytes to 0xFF.
 
 -- Jamieson Olsen <jamieson@fnal.gov>
 
@@ -61,6 +63,8 @@ architecture stream4_arch of stream4 is
     signal last_i, last_reg: std_logic := '0';
     signal dout_i, dout_reg: std_logic_vector(63 downto 0) := (others=>'0');
 
+    signal sender_enable: std_logic := '1';
+
     -- the holdoff state delays the FIFO read logic, thus allowing the FIFO
     -- to fill up a bit more. when this constant is tuned properly, the FIFO will
     -- go empty a just few times, but only near the end of the record. Note that 
@@ -91,6 +95,11 @@ begin
             end if;
         end if; 
     end process;
+
+    -- to disable this sender, set all four channel_id bytes to 0xFF
+    -- (this is done in the input mux module)
+
+    sender_enable <= '0' when (channel_id(0)=X"FF" and channel_id(1)=X"FF" and channel_id(2)=X"FF" and channel_id(3)=X"FF") else '1';
 
     -- gearbox / packer pipeline runs continuously...
 
@@ -307,9 +316,15 @@ begin
     regout_proc: process(clock)
     begin
         if rising_edge(clock) then
-            valid_reg <= valid_i;
-            dout_reg  <= dout_i;
-            last_reg  <= last_i;
+            if (sender_enable='1') then -- normal running
+                valid_reg <= valid_i;
+                dout_reg  <= dout_i;
+                last_reg  <= last_i;
+            else -- disable output
+                valid_reg <= '0';
+                dout_reg  <= (others=>'0');
+                last_reg  <= '0';
+            end if;
         end if;
     end process regout_proc;
 
