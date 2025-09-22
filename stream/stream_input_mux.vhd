@@ -1,35 +1,69 @@
 -- stream_input_mux.vhd
 -- For DAPHNE_MEZZ streaming sender
--- 40 input buses -> 8x4 output buses 
+-- 5x9 input buses -> 8x4 output buses 
 -- 32 8-bit registers for control, these are R/W
 -- Jamieson Olsen <jamieson@fnal.gov>
 --
--- base +  0 = select register for dout(0)(0)
--- base +  4 = select register for dout(0)(1)
--- base +  8 = select register for dout(0)(2)
--- base + 12 = select register for dout(0)(3)
--- base + 16 = select register for dout(1)(0)
--- base + 20 = select register for dout(1)(1)
--- ...
--- base + 124 = select register for dout(7)(3)
+-- axi-lite memory map:
 --
--- the streaming senders need to know what channels they are 
--- connected to, so this module also outputs the muxctrl_reg
--- 
--- muxctrl_reg is 8 bits: the upper nibble specifies the AFE number (0 to 4) and
--- the lower nibble specifies the afe channel number (0-7)
+-- address      description
+--
+-- base+0x00    select register for dout(0)(0)
+-- base+0x04    select register for dout(0)(1)
+-- base+0x08    select register for dout(0)(2)
+-- base+0x0C    select register for dout(0)(3)
+--
+-- base+0x10    select register for dout(1)(0)
+-- base+0x14    select register for dout(1)(1)
+-- base+0x18    select register for dout(1)(2)
+-- base+0x1C    select register for dout(1)(3)
+--
+-- base+0x20    select register for dout(2)(0)
+-- base+0x24    select register for dout(2)(1)
+-- base+0x28    select register for dout(2)(2)
+-- base+0x2C    select register for dout(2)(3)
+--
+-- base+0x30    select register for dout(3)(0)
+-- base+0x34    select register for dout(3)(1)
+-- base+0x38    select register for dout(3)(2)
+-- base+0x3C    select register for dout(3)(3)
+--
+-- base+0x40    select register for dout(4)(0)
+-- base+0x44    select register for dout(4)(1)
+-- base+0x48    select register for dout(4)(2)
+-- base+0x4C    select register for dout(4)(3)
+--
+-- base+0x50    select register for dout(5)(0)
+-- base+0x54    select register for dout(5)(1)
+-- base+0x58    select register for dout(5)(2)
+-- base+0x5C    select register for dout(5)(3)
+--
+-- base+0x60    select register for dout(6)(0)
+-- base+0x64    select register for dout(6)(1)
+-- base+0x68    select register for dout(6)(2)
+-- base+0x6C    select register for dout(6)(3)
+--
+-- base+0x70    select register for dout(7)(0)
+-- base+0x74    select register for dout(7)(1)
+-- base+0x78    select register for dout(7)(2)
+-- base+0x7C    select register for dout(7)(3)
+--
+-- The select register (muxctrl_reg) is 8 bits: the upper nibble specifies
+-- the AFE chip number (0 to 4) and the lower nibble specifies
+-- the AFE channel number (0 to 8). Note that AFE channel 8 is the
+-- fixed "frame" pattern. there are a few special diagnostic modes
+-- in this module, write 0x5* to activate these modes
+-- (scroll down for details on what these modes are).
 --
 -- some examples:
---   connect output(0)(3) to afe3,ch3 --> write 0x33 to address base+12
---   connect output(4)(2) to afe6,ch7 --> write 0x67 to address base+72
+--   connect output(0)(3) to AFE3,ch3 --> write 0x33 to address base+12
+--   connect output(4)(2) to AFE6,ch7 --> write 0x67 to address base+72
 --   generate random pattern on output(7)(1) --> write 0x2D to address base+116
 --   generate counter on output(5)(3) --> write 0x2C to address base+92
 --   turn off output(3)(2) --> write 0xFF to address base+56
 --
--- (scroll down in this file to see what special test modes are supported)
---
 -- remember: in the streaming mode sender this module determines what data is sent
--- to the core. it does not control what the input spy buffers see!
+-- to the core. it does NOT control what the input spy buffers see!
 
 library ieee;
 use ieee.std_logic_1164.all;
