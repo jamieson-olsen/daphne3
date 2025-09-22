@@ -72,12 +72,13 @@ architecture stream4_arch of stream4 is
     -- the VALID output. This parameter is largely cosmetic... 
     -- This parameter is hand tuned in simulation, some good values are:
     -- 
+    -- BLOCKS_PER_RECORD = 32  --> HOLDOFFCOUNT = 0
     -- BLOCKS_PER_RECORD = 64  --> HOLDOFFCOUNT = 32
     -- BLOCKS_PER_RECORD = 80  --> HOLDOFFCOUNT = 48
     -- BLOCKS_PER_RECORD = 96  --> HOLDOFFCOUNT = 54
     -- BLOCKS_PER_RECORD = 128 --> HOLDOFFCOUNT = 96
 
-    constant HOLDOFFCOUNT: integer range 0 to 1023 := 32;  
+    constant HOLDOFFCOUNT: integer range 0 to 1023 := 0;  
 
 begin
 
