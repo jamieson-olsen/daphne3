@@ -6,16 +6,16 @@
 -- FIFO is full. The FIFO_DEPTH is adjustable at compile time, values (2048, 4096, 8192, 16384) will
 -- impact the number of BlockRAMs this module uses.
 --
--- there are 3 registers defined in the axi-lite interface:
-
+-- There are 3 registers defined in the axi-lite interface:
+--
 -- Control Register (write address base+0)
 --  Specify which AFE channel to capture and arm the spy buffer
---    bits 6..4 = AFE chip number (0 to 4)
+--    bits 7..4 = AFE chip number (0 to 4)
 --    bits 3..0 = AFE channel number (0 to 8)
 --
 -- Status Register (read address base+0)
 --    bits 31..28 = spy buffer state machine status (search for "state_nibble" in this file for details) 
---    bits 6..4 = AFE chip number (0 to 4)
+--    bits 7..4 = AFE chip number (0 to 4)
 --    bits 3..0 = AFE channel number (0 to 8)
 --
 -- Data Register (read address base+4)
@@ -83,8 +83,7 @@ architecture inspybuff_arch of inspybuff is
     signal arm_axi_reg: std_logic_vector(1 downto 0) := "00";
     signal reset_reg: std_logic := '1';
     signal arm_reg, trig_reg: std_logic := '0';
-    signal afe_reg: std_logic_vector(2 downto 0) := "000";
-    signal afe_ch_reg: std_logic_vector(3 downto 0) := "0000";
+    signal sel_reg: std_logic_vector(7 downto 0) := X"00";
     signal din_mux, din_delayed32, din_delayed64: std_logic_vector(15 downto 0);
 
     signal FIFO_empty, FIFO_full, FIFO_wr_en, FIFO_rd_en, FIFO_rst: std_logic;
@@ -193,14 +192,12 @@ begin
   if rising_edge(AXI_IN.ACLK) then 
     if (AXI_IN.ARESETN = '0') then 
         arm_axi_reg <= "00";
-        afe_reg <= "000";
-        afe_ch_reg <= "0000";
+        sel_reg <= X"00";
     else
       if (reg_wren = '1' and AXI_IN.WSTRB = "1111") then
-        if (axi_awaddr(3 downto 0)="0000") then -- write addr 0
+        if (axi_awaddr(3 downto 0)="0000") then -- write addr base+0
             arm_axi_reg(0) <= '1';
-            afe_reg    <= AXI_IN.WDATA(6 downto 4); -- store the target AFE number (0-4)
-            afe_ch_reg <= AXI_IN.WDATA(3 downto 0); -- store the target AFE channel number (0-8)
+            sel_reg <= AXI_IN.WDATA(7 downto 0);
         end if;
       else
         arm_axi_reg(0) <= '0';
@@ -319,56 +316,58 @@ end process;
 -- end of axilite glue logic
 
 -- big dumb mux to determine which input channel is selected for capture
+-- sel_reg(7..4) = afe chip number 0-4
+-- sel_reg(3..0) = afe channel number 0-8
 
-din_mux <= din(0)(0) when (afe_reg="000" and afe_ch_reg="0000") else 
-           din(0)(1) when (afe_reg="000" and afe_ch_reg="0001") else 
-           din(0)(2) when (afe_reg="000" and afe_ch_reg="0010") else 
-           din(0)(3) when (afe_reg="000" and afe_ch_reg="0011") else 
-           din(0)(4) when (afe_reg="000" and afe_ch_reg="0100") else 
-           din(0)(5) when (afe_reg="000" and afe_ch_reg="0101") else 
-           din(0)(6) when (afe_reg="000" and afe_ch_reg="0110") else 
-           din(0)(7) when (afe_reg="000" and afe_ch_reg="0111") else 
-           din(0)(8) when (afe_reg="000" and afe_ch_reg="1000") else
+din_mux <= din(0)(0) when (sel_reg=X"00") else 
+           din(0)(1) when (sel_reg=X"01") else 
+           din(0)(2) when (sel_reg=X"02") else 
+           din(0)(3) when (sel_reg=X"03") else 
+           din(0)(4) when (sel_reg=X"04") else 
+           din(0)(5) when (sel_reg=X"05") else 
+           din(0)(6) when (sel_reg=X"06") else 
+           din(0)(7) when (sel_reg=X"07") else 
+           din(0)(8) when (sel_reg=X"08") else
 
-           din(1)(0) when (afe_reg="001" and afe_ch_reg="0000") else 
-           din(1)(1) when (afe_reg="001" and afe_ch_reg="0001") else 
-           din(1)(2) when (afe_reg="001" and afe_ch_reg="0010") else 
-           din(1)(3) when (afe_reg="001" and afe_ch_reg="0011") else 
-           din(1)(4) when (afe_reg="001" and afe_ch_reg="0100") else 
-           din(1)(5) when (afe_reg="001" and afe_ch_reg="0101") else 
-           din(1)(6) when (afe_reg="001" and afe_ch_reg="0110") else 
-           din(1)(7) when (afe_reg="001" and afe_ch_reg="0111") else 
-           din(1)(8) when (afe_reg="001" and afe_ch_reg="1000") else
+           din(1)(0) when (sel_reg=X"10") else 
+           din(1)(1) when (sel_reg=X"11") else 
+           din(1)(2) when (sel_reg=X"12") else 
+           din(1)(3) when (sel_reg=X"13") else 
+           din(1)(4) when (sel_reg=X"14") else 
+           din(1)(5) when (sel_reg=X"15") else 
+           din(1)(6) when (sel_reg=X"16") else 
+           din(1)(7) when (sel_reg=X"17") else 
+           din(1)(8) when (sel_reg=X"18") else
 
-           din(2)(0) when (afe_reg="010" and afe_ch_reg="0000") else 
-           din(2)(1) when (afe_reg="010" and afe_ch_reg="0001") else 
-           din(2)(2) when (afe_reg="010" and afe_ch_reg="0010") else 
-           din(2)(3) when (afe_reg="010" and afe_ch_reg="0011") else 
-           din(2)(4) when (afe_reg="010" and afe_ch_reg="0100") else 
-           din(2)(5) when (afe_reg="010" and afe_ch_reg="0101") else 
-           din(2)(6) when (afe_reg="010" and afe_ch_reg="0110") else 
-           din(2)(7) when (afe_reg="010" and afe_ch_reg="0111") else 
-           din(2)(8) when (afe_reg="010" and afe_ch_reg="1000") else
+           din(2)(0) when (sel_reg=X"20") else 
+           din(2)(1) when (sel_reg=X"21") else 
+           din(2)(2) when (sel_reg=X"22") else 
+           din(2)(3) when (sel_reg=X"23") else 
+           din(2)(4) when (sel_reg=X"24") else 
+           din(2)(5) when (sel_reg=X"25") else 
+           din(2)(6) when (sel_reg=X"26") else 
+           din(2)(7) when (sel_reg=X"27") else 
+           din(2)(8) when (sel_reg=X"28") else
 
-           din(3)(0) when (afe_reg="011" and afe_ch_reg="0000") else 
-           din(3)(1) when (afe_reg="011" and afe_ch_reg="0001") else 
-           din(3)(2) when (afe_reg="011" and afe_ch_reg="0010") else 
-           din(3)(3) when (afe_reg="011" and afe_ch_reg="0011") else 
-           din(3)(4) when (afe_reg="011" and afe_ch_reg="0100") else 
-           din(3)(5) when (afe_reg="011" and afe_ch_reg="0101") else 
-           din(3)(6) when (afe_reg="011" and afe_ch_reg="0110") else 
-           din(3)(7) when (afe_reg="011" and afe_ch_reg="0111") else 
-           din(3)(8) when (afe_reg="011" and afe_ch_reg="1000") else
+           din(3)(0) when (sel_reg=X"30") else 
+           din(3)(1) when (sel_reg=X"31") else 
+           din(3)(2) when (sel_reg=X"32") else 
+           din(3)(3) when (sel_reg=X"33") else 
+           din(3)(4) when (sel_reg=X"34") else 
+           din(3)(5) when (sel_reg=X"35") else 
+           din(3)(6) when (sel_reg=X"36") else 
+           din(3)(7) when (sel_reg=X"37") else 
+           din(3)(8) when (sel_reg=X"38") else
  
-           din(4)(0) when (afe_reg="100" and afe_ch_reg="0000") else 
-           din(4)(1) when (afe_reg="100" and afe_ch_reg="0001") else 
-           din(4)(2) when (afe_reg="100" and afe_ch_reg="0010") else 
-           din(4)(3) when (afe_reg="100" and afe_ch_reg="0011") else 
-           din(4)(4) when (afe_reg="100" and afe_ch_reg="0100") else 
-           din(4)(5) when (afe_reg="100" and afe_ch_reg="0101") else 
-           din(4)(6) when (afe_reg="100" and afe_ch_reg="0110") else 
-           din(4)(7) when (afe_reg="100" and afe_ch_reg="0111") else 
-           din(4)(8) when (afe_reg="100" and afe_ch_reg="1000") else
+           din(4)(0) when (sel_reg=X"40") else 
+           din(4)(1) when (sel_reg=X"41") else 
+           din(4)(2) when (sel_reg=X"42") else 
+           din(4)(3) when (sel_reg=X"43") else 
+           din(4)(4) when (sel_reg=X"44") else 
+           din(4)(5) when (sel_reg=X"45") else 
+           din(4)(6) when (sel_reg=X"46") else 
+           din(4)(7) when (sel_reg=X"47") else 
+           din(4)(8) when (sel_reg=X"48") else
 
            (others=>'0');
 
@@ -486,7 +485,7 @@ state_nibble <= "0001" when (state=rst) else -- in reset
                 "0110" when (state=store) else -- capturing data but the FIFO is not yet FULL
                 "0000";
 
-status_word <= state_nibble & X"00000" & '0' & afe_reg(2 downto 0) & afe_ch_reg(3 downto 0);
+status_word <= state_nibble & X"00000" & sel_reg(7 downto 0);
 
 -- FIFO read and write ports are 16 bits wide
 -- FIFO depth is controlled by generic FIFO_DEPTH
