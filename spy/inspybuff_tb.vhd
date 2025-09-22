@@ -19,7 +19,7 @@ component inspybuff
     generic (FIFO_DEPTH: integer := 4096);  -- 2048, 4096, 8192, 16384
 	port (
 	    clock: in std_logic;
-	    din: in array_40x14_type; 
+	    din: in array_5x9x16_type; 
 	    trigger: in std_logic;
         AXI_IN: in AXILITE_INREC;  
         AXI_OUT: out AXILITE_OUTREC
@@ -28,17 +28,12 @@ end component;
 
 constant clock_period: time := 16.0ns;  -- 62.5 MHz
 signal clock: std_logic := '0';
-signal din: array_40x14_type := (
-"00000000000000","00000000000000","00000000000000","00000000000000",
-"00000000000000","00000000000000","00000000000000","00000000000000",
-"00000000000000","00000000000000","00000000000000","00000000000000",
-"00000000000000","00000000000000","00000000000000","00000000000000",
-"00000000000000","00000000000000","00000000000000","00000000000000",
-"00000000000000","00000000000000","00000000000000","00000000000000",
-"00000000000000","00000000000000","00000000000000","00000000000000",
-"00000000000000","00000000000000","00000000000000","00000000000000",
-"00000000000000","00000000000000","00000000000000","00000000000000",
-"00000000000000","00000000000000","00000000000000","00000000000000");
+signal din: array_5x9x16_type := (
+(X"0000", X"0000", X"0000", X"0000", X"0000", X"0000", X"0000", X"0000", X"0000"), 
+(X"0000", X"0000", X"0000", X"0000", X"0000", X"0000", X"0000", X"0000", X"0000"),
+(X"0000", X"0000", X"0000", X"0000", X"0000", X"0000", X"0000", X"0000", X"0000"),
+(X"0000", X"0000", X"0000", X"0000", X"0000", X"0000", X"0000", X"0000", X"0000"),
+(X"0000", X"0000", X"0000", X"0000", X"0000", X"0000", X"0000", X"0000", X"0000"));
 signal trigger: std_logic := '0';
 
 signal AXI_IN: AXILITE_INREC := (ACLK=>'0', ARESETN=>'0', AWADDR=>X"00000000", 
@@ -54,11 +49,14 @@ clock <= not clock after clock_period/2;
 
 fakesender_proc: process -- some dumb repeating thing
 begin
-    wait until rising_edge(clock);  
-    for c in 39 downto 0 loop
-        din(c)(13 downto 8) <= std_logic_vector( to_unsigned(c,6) );
-        din(c)(7 downto 0)  <= std_logic_vector( unsigned(din(c)(7 downto 0))+1 );
-    end loop;
+    wait until rising_edge(clock);      
+    afe_loop: for a in 4 downto 0 loop
+        ch_loop: for c in 8 downto 0 loop
+            din(a)(c)(15 downto 13) <= std_logic_vector( to_unsigned(a,3) );
+            din(a)(c)(12 downto 9) <= std_logic_vector( to_unsigned(c,4) );
+            din(a)(c)(8 downto 0)  <= std_logic_vector( unsigned(din(a)(c)(8 downto 0))+1 );
+        end loop ch_loop;
+    end loop afe_loop;
 end process fakesender_proc;
 
 trig_proc: process -- make a trigger pulse 
@@ -126,7 +124,7 @@ begin
 wait for 100ns;
 AXI_IN.ARESETN <= '1'; -- release AXI reset
 wait for 1us;
-axipoke(addr => X"00000000", data => X"0000000C"); -- arm it, select channel 12
+axipoke(addr => X"00000000", data => X"00000036"); -- arm it, select AFE_NUMBER=3, AFE_CHANNEL=6
 wait for 1us;
 axipeek(addr => X"00000000"); -- poll status register
 wait for 70us;

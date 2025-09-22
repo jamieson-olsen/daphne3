@@ -1,27 +1,37 @@
--- DAPHNE input spy buffer 2.0
+-- DAPHNE input spy buffer
 --
--- Major Changes:
---    1. memory style interface replaced with FIFO style interface, just two addresses now!
---    2. select just one channel out of 40
---    3. 4k samples deep, with 64 pre-trigger samples
+-- Select one of 45 inputs to capture. First this module is ARMED by the user, then it waits
+-- for a TRIGGER pulse, which comes from external pin or a register write in the front end module.
+-- Then it captures 64 pre-trigger samples and then it captures post-trigger samples until the
+-- FIFO is full. The FIFO_DEPTH is adjustable at compile time, values (2048, 4096, 8192, 16384) will
+-- impact the number of BlockRAMs this module uses.
 --
--- address 0 = ARM the module by writing the CHANNEL NUMBER (0-39) to this address
---             reading this address will return the status of the state machine in the upper nibble
---             (search for state_nibble further down in this file) and the current channel number
---             in the lower 6 bits.
+-- there are 3 registers defined in the axi-lite interface:
+
+-- Control Register (write address base+0)
+--  Specify which AFE channel to capture and arm the spy buffer
+--    bits 6..4 = AFE chip number (0 to 4)
+--    bits 3..0 = AFE channel number (0 to 8)
 --
--- address 4 = FIFO data register (R/O) read the captured data one sample at a time
---             read this register repeatedly to get it all.
+-- Status Register (read address base+0)
+--    bits 31..28 = spy buffer state machine status (search for "state_nibble" in this file for details) 
+--    bits 6..4 = AFE chip number (0 to 4)
+--    bits 3..0 = AFE channel number (0 to 8)
 --
--- HOW TO USE IT: First, write the channel numberto address 0. That will FLUSH the FIFO and ARM it.
--- Now you can poll the status by reading address 0. The upper nibble will indicate which state this module is in.
--- Once it is armed this module will wait for the trigger signal, then it will store 64 pre-trigger samples
--- and keep storing data until the FIFO is full. Then it will return to idle and wait to be armed again.
--- Now you can read the captured data by reading address 1 repeatedly. Reading this register will return
--- a 32 bit word that has a single 14 bit sample in bits 13..0. You don't have to read out the entire FIFO since 
+-- Data Register (read address base+4)
+--    bits 13..0 = the captured AFE data; read this register repeatedly to get it all
+--
+-- HOW TO USE IT: First, write the AFE chip number and channel number to the control register. 
+-- That will FLUSH the FIFO and ARM it.  Now read the status register. The upper nibble will indicate
+-- the state of the capture logic. Once it is armed this module will wait for the trigger signal,
+-- then it will store 64 pre-trigger samples and keep storing data until the FIFO is full. 
+-- Then it will return to idle and wait to be armed again. Now you can read the captured data by 
+-- reading the data register repeatedly. Reading this register will return a 32 bit word that has
+-- a single 14 bit sample in bits 13..0. You don't have to read out the entire FIFO since 
 -- it gets flushed each time it is armed.
 --
--- The FIFO depth is controlled by the FIFO_DEPTH generic and will impact the number of BlockRAMs used here:
+-- The FIFO depth is controlled by the FIFO_DEPTH generic
+-- and will impact the number of BlockRAMs used here:
 --
 -- 2048  = 1 36kbit BlockRAM
 -- 4096  = 2 36kbit BlockRAMs
@@ -44,7 +54,7 @@ entity inspybuff is
     generic (FIFO_DEPTH: integer := 4096);  -- 2048, 4096, 8192, 16384
 	port (
 	    clock: in std_logic; -- 62.5MHz
-	    din: in array_40x14_type; 
+	    din: in array_5x9x16_type; 
         trigger: in std_logic;
         AXI_IN: in AXILITE_INREC;  
         AXI_OUT: out AXILITE_OUTREC
@@ -73,8 +83,9 @@ architecture inspybuff_arch of inspybuff is
     signal arm_axi_reg: std_logic_vector(1 downto 0) := "00";
     signal reset_reg: std_logic := '1';
     signal arm_reg, trig_reg: std_logic := '0';
-    signal sel_reg: std_logic_vector(5 downto 0) := "000000";
-    signal din_mux, din_delayed32, din_delayed64: std_logic_vector(13 downto 0);
+    signal afe_reg: std_logic_vector(2 downto 0) := "000";
+    signal afe_ch_reg: std_logic_vector(3 downto 0) := "0000";
+    signal din_mux, din_delayed32, din_delayed64: std_logic_vector(15 downto 0);
 
     signal FIFO_empty, FIFO_full, FIFO_wr_en, FIFO_rd_en, FIFO_rst: std_logic;
     signal FIFO_din, FIFO_dout: std_logic_vector(15 downto 0);
@@ -182,12 +193,14 @@ begin
   if rising_edge(AXI_IN.ACLK) then 
     if (AXI_IN.ARESETN = '0') then 
         arm_axi_reg <= "00";
-        sel_reg <= "000000";
+        afe_reg <= "000";
+        afe_ch_reg <= "0000";
     else
       if (reg_wren = '1' and AXI_IN.WSTRB = "1111") then
         if (axi_awaddr(3 downto 0)="0000") then -- write addr 0
             arm_axi_reg(0) <= '1';
-            sel_reg <= AXI_IN.WDATA(5 downto 0); -- store the target channel number
+            afe_reg    <= AXI_IN.WDATA(6 downto 4); -- store the target AFE number (0-4)
+            afe_ch_reg <= AXI_IN.WDATA(3 downto 0); -- store the target AFE channel number (0-8)
         end if;
       else
         arm_axi_reg(0) <= '0';
@@ -307,56 +320,61 @@ end process;
 
 -- big dumb mux to determine which input channel is selected for capture
 
-din_mux <= din( 0) when (sel_reg="000000") else 
-           din( 1) when (sel_reg="000001") else 
-           din( 2) when (sel_reg="000010") else 
-           din( 3) when (sel_reg="000011") else 
-           din( 4) when (sel_reg="000100") else 
-           din( 5) when (sel_reg="000101") else 
-           din( 6) when (sel_reg="000110") else 
-           din( 7) when (sel_reg="000111") else 
+din_mux <= din(0)(0) when (afe_reg="000" and afe_ch_reg="0000") else 
+           din(0)(1) when (afe_reg="000" and afe_ch_reg="0001") else 
+           din(0)(2) when (afe_reg="000" and afe_ch_reg="0010") else 
+           din(0)(3) when (afe_reg="000" and afe_ch_reg="0011") else 
+           din(0)(4) when (afe_reg="000" and afe_ch_reg="0100") else 
+           din(0)(5) when (afe_reg="000" and afe_ch_reg="0101") else 
+           din(0)(6) when (afe_reg="000" and afe_ch_reg="0110") else 
+           din(0)(7) when (afe_reg="000" and afe_ch_reg="0111") else 
+           din(0)(8) when (afe_reg="000" and afe_ch_reg="1000") else
 
-           din( 8) when (sel_reg="001000") else 
-           din( 9) when (sel_reg="001001") else 
-           din(10) when (sel_reg="001010") else 
-           din(11) when (sel_reg="001011") else 
-           din(12) when (sel_reg="001100") else 
-           din(13) when (sel_reg="001101") else 
-           din(14) when (sel_reg="001110") else 
-           din(15) when (sel_reg="001111") else 
+           din(1)(0) when (afe_reg="001" and afe_ch_reg="0000") else 
+           din(1)(1) when (afe_reg="001" and afe_ch_reg="0001") else 
+           din(1)(2) when (afe_reg="001" and afe_ch_reg="0010") else 
+           din(1)(3) when (afe_reg="001" and afe_ch_reg="0011") else 
+           din(1)(4) when (afe_reg="001" and afe_ch_reg="0100") else 
+           din(1)(5) when (afe_reg="001" and afe_ch_reg="0101") else 
+           din(1)(6) when (afe_reg="001" and afe_ch_reg="0110") else 
+           din(1)(7) when (afe_reg="001" and afe_ch_reg="0111") else 
+           din(1)(8) when (afe_reg="001" and afe_ch_reg="1000") else
 
-           din(16) when (sel_reg="010000") else 
-           din(17) when (sel_reg="010001") else 
-           din(18) when (sel_reg="010010") else 
-           din(19) when (sel_reg="010011") else 
-           din(20) when (sel_reg="010100") else 
-           din(21) when (sel_reg="010101") else 
-           din(22) when (sel_reg="010110") else 
-           din(23) when (sel_reg="010111") else 
+           din(2)(0) when (afe_reg="010" and afe_ch_reg="0000") else 
+           din(2)(1) when (afe_reg="010" and afe_ch_reg="0001") else 
+           din(2)(2) when (afe_reg="010" and afe_ch_reg="0010") else 
+           din(2)(3) when (afe_reg="010" and afe_ch_reg="0011") else 
+           din(2)(4) when (afe_reg="010" and afe_ch_reg="0100") else 
+           din(2)(5) when (afe_reg="010" and afe_ch_reg="0101") else 
+           din(2)(6) when (afe_reg="010" and afe_ch_reg="0110") else 
+           din(2)(7) when (afe_reg="010" and afe_ch_reg="0111") else 
+           din(2)(8) when (afe_reg="010" and afe_ch_reg="1000") else
 
-           din(24) when (sel_reg="011000") else 
-           din(25) when (sel_reg="011001") else 
-           din(26) when (sel_reg="011010") else 
-           din(27) when (sel_reg="011011") else 
-           din(28) when (sel_reg="011100") else 
-           din(29) when (sel_reg="011101") else 
-           din(30) when (sel_reg="011110") else 
-           din(31) when (sel_reg="011111") else 
-
-           din(32) when (sel_reg="100000") else 
-           din(33) when (sel_reg="100001") else 
-           din(34) when (sel_reg="100010") else 
-           din(35) when (sel_reg="100011") else 
-           din(36) when (sel_reg="100100") else 
-           din(37) when (sel_reg="100101") else 
-           din(38) when (sel_reg="100110") else 
-           din(39) when (sel_reg="100111") else 
+           din(3)(0) when (afe_reg="011" and afe_ch_reg="0000") else 
+           din(3)(1) when (afe_reg="011" and afe_ch_reg="0001") else 
+           din(3)(2) when (afe_reg="011" and afe_ch_reg="0010") else 
+           din(3)(3) when (afe_reg="011" and afe_ch_reg="0011") else 
+           din(3)(4) when (afe_reg="011" and afe_ch_reg="0100") else 
+           din(3)(5) when (afe_reg="011" and afe_ch_reg="0101") else 
+           din(3)(6) when (afe_reg="011" and afe_ch_reg="0110") else 
+           din(3)(7) when (afe_reg="011" and afe_ch_reg="0111") else 
+           din(3)(8) when (afe_reg="011" and afe_ch_reg="1000") else
+ 
+           din(4)(0) when (afe_reg="100" and afe_ch_reg="0000") else 
+           din(4)(1) when (afe_reg="100" and afe_ch_reg="0001") else 
+           din(4)(2) when (afe_reg="100" and afe_ch_reg="0010") else 
+           din(4)(3) when (afe_reg="100" and afe_ch_reg="0011") else 
+           din(4)(4) when (afe_reg="100" and afe_ch_reg="0100") else 
+           din(4)(5) when (afe_reg="100" and afe_ch_reg="0101") else 
+           din(4)(6) when (afe_reg="100" and afe_ch_reg="0110") else 
+           din(4)(7) when (afe_reg="100" and afe_ch_reg="0111") else 
+           din(4)(8) when (afe_reg="100" and afe_ch_reg="1000") else
 
            (others=>'0');
 
 -- delay that data by 64 clocks
 
-gendelay: for i in 13 downto 0 generate
+gendelay: for i in 15 downto 0 generate
 
     srlc32e_0_inst : srlc32e
     port map(
@@ -456,7 +474,7 @@ FIFO_rd_en <= '1' when (reg_rden='1' and AXI_IN.ARADDR(3 downto 0)="0100") else 
 
 FIFO_rst <= '1' when (state=fifo_clear) else '0';
 
-FIFO_din <= "00" & din_delayed64;
+FIFO_din <= din_delayed64;
 
 -- these four bits reflect the current state
 
@@ -468,7 +486,7 @@ state_nibble <= "0001" when (state=rst) else -- in reset
                 "0110" when (state=store) else -- capturing data but the FIFO is not yet FULL
                 "0000";
 
-status_word <= state_nibble & X"00000" & "00" & sel_reg;
+status_word <= state_nibble & X"00000" & '0' & afe_reg(2 downto 0) & afe_ch_reg(3 downto 0);
 
 -- FIFO read and write ports are 16 bits wide
 -- FIFO depth is controlled by generic FIFO_DEPTH

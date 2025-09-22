@@ -15,10 +15,13 @@
 --
 -- the streaming senders need to know what channels they are 
 -- connected to, so this module also outputs the muxctrl_reg
+-- 
+-- muxctrl_reg is 8 bits: the upper nibble specifies the AFE number (0 to 4) and
+-- the lower nibble specifies the afe channel number (0-7)
 --
 -- some examples:
---   connect output(0)(3) to input(27) --> write 0x1B to address base+12
---   connect output(4)(2) to input(4) --> write 0x04 to address base+72
+--   connect output(0)(3) to afe3,ch3 --> write 0x33 to address base+12
+--   connect output(4)(2) to afe6,ch7 --> write 0x67 to address base+72
 --   generate random pattern on output(7)(1) --> write 0x2D to address base+116
 --   generate counter on output(5)(3) --> write 0x2C to address base+92
 --   turn off output(3)(2) --> write 0xFF to address base+56
@@ -37,7 +40,7 @@ use work.daphne3_package.all;
 entity stream_input_mux is
 port(
     clock: in std_logic; -- 62.5MHz master clock
-    din: in array_40x14_type;
+    din: in array_5x9x16_type; -- from the front end
     dout: out array_8x4x14_type;
     muxctrl: out array_8x4x8_type;
     AXI_IN: in AXILITE_INREC;
@@ -64,7 +67,7 @@ signal reg_wren: std_logic;
 signal reg_data_out:std_logic_vector(31 downto 0);
 signal aw_en: std_logic;
 
-signal muxctrl_reg: array_8x4x8_type;
+signal muxctrl_reg: array_8x4x8_type; -- afe number in upper nibble, afe channel number in lower nibble
 
 signal counter_reg: std_logic_vector(13 downto 0) := "00000000000000";
 signal rand_reg:    std_logic_vector(13 downto 0) := "00100111010101";
@@ -82,68 +85,78 @@ begin
     end if;
 end process counter_proc;
 
--- big old programmable mux: 40 inputs ---> 8x4 outputs
--- this is controlled by mux_ctrl, a block of 8x4 8-bit registers
+-- big old programmable mux: 5x9 inputs ---> 8x4 outputs
+-- this is controlled by afe_reg and afe_ch_reg, a block of regs
 -- these registers are R/W from AXI LITE interface
 --
 -- some examples:
--- if mux_ctrl(2)(3)=X"07" then dout(2)(3) is connected to din(7)
+-- if mux_ctrl(2)(3)=X"07" then dout(2)(3) is connected to din(0)(7)
 -- if mux_ctrl(4)(1)=X"3B" then dout(4)(1) is forced to all zeros
 -- if mux_ctrl(5)(1)=X"2D" then dout(5)(1) is a pseudorandom pattern
 
+-- do the 16->14 bit truncation here
 
 gen_send: for s in 7 downto 0 generate
     gen_chan: for c in 3 downto 0 generate
 
-        dout(s)(c) <= din( 0) when (muxctrl_reg(s)(c)=X"00") else -- reg values 0-39 select the input
-                      din( 1) when (muxctrl_reg(s)(c)=X"01") else
-                      din( 2) when (muxctrl_reg(s)(c)=X"02") else
-                      din( 3) when (muxctrl_reg(s)(c)=X"03") else
-                      din( 4) when (muxctrl_reg(s)(c)=X"04") else
-                      din( 5) when (muxctrl_reg(s)(c)=X"05") else
-                      din( 6) when (muxctrl_reg(s)(c)=X"06") else
-                      din( 7) when (muxctrl_reg(s)(c)=X"07") else
-                      din( 8) when (muxctrl_reg(s)(c)=X"08") else
-                      din( 9) when (muxctrl_reg(s)(c)=X"09") else
-                      din(10) when (muxctrl_reg(s)(c)=X"0A") else
-                      din(11) when (muxctrl_reg(s)(c)=X"0B") else
-                      din(12) when (muxctrl_reg(s)(c)=X"0C") else
-                      din(13) when (muxctrl_reg(s)(c)=X"0D") else
-                      din(14) when (muxctrl_reg(s)(c)=X"0E") else
-                      din(15) when (muxctrl_reg(s)(c)=X"0F") else
+        dout(s)(c) <= din(0)(0)(13 downto 0) when (muxctrl_reg(s)(c)=X"00") else 
+                      din(0)(1)(13 downto 0) when (muxctrl_reg(s)(c)=X"01") else 
+                      din(0)(2)(13 downto 0) when (muxctrl_reg(s)(c)=X"02") else 
+                      din(0)(3)(13 downto 0) when (muxctrl_reg(s)(c)=X"03") else 
+                      din(0)(4)(13 downto 0) when (muxctrl_reg(s)(c)=X"04") else 
+                      din(0)(5)(13 downto 0) when (muxctrl_reg(s)(c)=X"05") else 
+                      din(0)(6)(13 downto 0) when (muxctrl_reg(s)(c)=X"06") else 
+                      din(0)(7)(13 downto 0) when (muxctrl_reg(s)(c)=X"07") else 
+                      din(0)(8)(13 downto 0) when (muxctrl_reg(s)(c)=X"08") else 
 
-                      din(16) when (muxctrl_reg(s)(c)=X"10") else
-                      din(17) when (muxctrl_reg(s)(c)=X"11") else
-                      din(18) when (muxctrl_reg(s)(c)=X"12") else
-                      din(19) when (muxctrl_reg(s)(c)=X"13") else
-                      din(20) when (muxctrl_reg(s)(c)=X"14") else
-                      din(21) when (muxctrl_reg(s)(c)=X"15") else
-                      din(22) when (muxctrl_reg(s)(c)=X"16") else
-                      din(23) when (muxctrl_reg(s)(c)=X"17") else
-                      din(24) when (muxctrl_reg(s)(c)=X"18") else
-                      din(25) when (muxctrl_reg(s)(c)=X"19") else
-                      din(26) when (muxctrl_reg(s)(c)=X"1A") else
-                      din(27) when (muxctrl_reg(s)(c)=X"1B") else
-                      din(28) when (muxctrl_reg(s)(c)=X"1C") else
-                      din(29) when (muxctrl_reg(s)(c)=X"1D") else
-                      din(30) when (muxctrl_reg(s)(c)=X"1E") else
-                      din(31) when (muxctrl_reg(s)(c)=X"1F") else
+                      din(1)(0)(13 downto 0) when (muxctrl_reg(s)(c)=X"10") else 
+                      din(1)(1)(13 downto 0) when (muxctrl_reg(s)(c)=X"11") else 
+                      din(1)(2)(13 downto 0) when (muxctrl_reg(s)(c)=X"12") else 
+                      din(1)(3)(13 downto 0) when (muxctrl_reg(s)(c)=X"13") else 
+                      din(1)(4)(13 downto 0) when (muxctrl_reg(s)(c)=X"14") else 
+                      din(1)(5)(13 downto 0) when (muxctrl_reg(s)(c)=X"15") else 
+                      din(1)(6)(13 downto 0) when (muxctrl_reg(s)(c)=X"16") else 
+                      din(1)(7)(13 downto 0) when (muxctrl_reg(s)(c)=X"17") else 
+                      din(1)(8)(13 downto 0) when (muxctrl_reg(s)(c)=X"18") else 
 
-                      din(32) when (muxctrl_reg(s)(c)=X"20") else
-                      din(33) when (muxctrl_reg(s)(c)=X"21") else
-                      din(34) when (muxctrl_reg(s)(c)=X"22") else
-                      din(35) when (muxctrl_reg(s)(c)=X"23") else
-                      din(36) when (muxctrl_reg(s)(c)=X"24") else
-                      din(37) when (muxctrl_reg(s)(c)=X"25") else
-                      din(38) when (muxctrl_reg(s)(c)=X"26") else
-                      din(39) when (muxctrl_reg(s)(c)=X"27") else
+                      din(2)(0)(13 downto 0) when (muxctrl_reg(s)(c)=X"20") else 
+                      din(2)(1)(13 downto 0) when (muxctrl_reg(s)(c)=X"21") else 
+                      din(2)(2)(13 downto 0) when (muxctrl_reg(s)(c)=X"22") else 
+                      din(2)(3)(13 downto 0) when (muxctrl_reg(s)(c)=X"23") else 
+                      din(2)(4)(13 downto 0) when (muxctrl_reg(s)(c)=X"24") else 
+                      din(2)(5)(13 downto 0) when (muxctrl_reg(s)(c)=X"25") else 
+                      din(2)(6)(13 downto 0) when (muxctrl_reg(s)(c)=X"26") else 
+                      din(2)(7)(13 downto 0) when (muxctrl_reg(s)(c)=X"27") else 
+                      din(2)(8)(13 downto 0) when (muxctrl_reg(s)(c)=X"28") else 
 
-                      "11111111111111" when (muxctrl_reg(s)(c)=X"28") else -- test mode: fixed pattern = all 1s
-                      "00000011111111" when (muxctrl_reg(s)(c)=X"29") else -- test mode: fixed pattern = lower 8 bits set
-                      "11111100000000" when (muxctrl_reg(s)(c)=X"2A") else -- test mode: fixed pattern = upper 6 bits set
-                      "11000000000011" when (muxctrl_reg(s)(c)=X"2B") else -- test mode: fixed pattern = two MSb and two LSb set
-                      counter_reg      when (muxctrl_reg(s)(c)=X"2C") else -- test mode: incrementing counter
-                      rand_reg         when (muxctrl_reg(s)(c)=X"2D") else -- test mode: pseudorandom generator
+                      din(3)(0)(13 downto 0) when (muxctrl_reg(s)(c)=X"30") else 
+                      din(3)(1)(13 downto 0) when (muxctrl_reg(s)(c)=X"31") else 
+                      din(3)(2)(13 downto 0) when (muxctrl_reg(s)(c)=X"32") else 
+                      din(3)(3)(13 downto 0) when (muxctrl_reg(s)(c)=X"33") else 
+                      din(3)(4)(13 downto 0) when (muxctrl_reg(s)(c)=X"34") else 
+                      din(3)(5)(13 downto 0) when (muxctrl_reg(s)(c)=X"35") else 
+                      din(3)(6)(13 downto 0) when (muxctrl_reg(s)(c)=X"36") else 
+                      din(3)(7)(13 downto 0) when (muxctrl_reg(s)(c)=X"37") else 
+                      din(3)(8)(13 downto 0) when (muxctrl_reg(s)(c)=X"38") else 
+
+                      din(4)(0)(13 downto 0) when (muxctrl_reg(s)(c)=X"40") else 
+                      din(4)(1)(13 downto 0) when (muxctrl_reg(s)(c)=X"41") else 
+                      din(4)(2)(13 downto 0) when (muxctrl_reg(s)(c)=X"42") else 
+                      din(4)(3)(13 downto 0) when (muxctrl_reg(s)(c)=X"43") else 
+                      din(4)(4)(13 downto 0) when (muxctrl_reg(s)(c)=X"44") else 
+                      din(4)(5)(13 downto 0) when (muxctrl_reg(s)(c)=X"45") else 
+                      din(4)(6)(13 downto 0) when (muxctrl_reg(s)(c)=X"46") else 
+                      din(4)(7)(13 downto 0) when (muxctrl_reg(s)(c)=X"47") else 
+                      din(4)(8)(13 downto 0) when (muxctrl_reg(s)(c)=X"48") else 
+
+                      -- virtual "sixth AFE" chip for making diagnostic patterns:
+
+                      "11111111111111" when (muxctrl_reg(s)(c)=X"50") else -- test mode: fixed pattern = all 1s
+                      "00000011111111" when (muxctrl_reg(s)(c)=X"51") else -- test mode: fixed pattern = lower 8 bits set
+                      "11111100000000" when (muxctrl_reg(s)(c)=X"52") else -- test mode: fixed pattern = upper 6 bits set
+                      "11000000000011" when (muxctrl_reg(s)(c)=X"53") else -- test mode: fixed pattern = two MSb and two LSb set
+                      counter_reg      when (muxctrl_reg(s)(c)=X"54") else -- test mode: incrementing counter
+                      rand_reg         when (muxctrl_reg(s)(c)=X"55") else -- test mode: pseudorandom generator
 
                       (others=>'0'); -- all other values force the associated input to zero
 
@@ -250,18 +263,45 @@ begin
     if (AXI_IN.ARESETN = '0') then 
 
         -- here are the default muxctrl values
-        -- din(0) ---> dout(0)(0) 
-        -- din(1) ---> dout(0)(1)
-        -- din(2) ---> dout(0)(2)
-        -- din(3) ---> dout(0)(3)
-        -- din(4) ---> dout(1)(0)
-        -- etc.
+        muxctrl_reg(0)(0) <= X"00";  -- AFE 0, ch 0
+        muxctrl_reg(0)(1) <= X"01";  -- AFE 0, ch 1
+        muxctrl_reg(0)(2) <= X"02";
+        muxctrl_reg(0)(3) <= X"03";
 
-        sloop: for s in 0 to 7 loop
-            cloop: for c in 0 to 3 loop
-                muxctrl_reg(s)(c) <= std_logic_vector( to_unsigned(((s*4)+c),8) );
-            end loop cloop;
-        end loop sloop;
+        muxctrl_reg(1)(0) <= X"04";
+        muxctrl_reg(1)(1) <= X"05";
+        muxctrl_reg(1)(2) <= X"06";
+        muxctrl_reg(1)(3) <= X"07";
+
+        muxctrl_reg(2)(0) <= X"10";
+        muxctrl_reg(2)(1) <= X"11";
+        muxctrl_reg(2)(2) <= X"12";
+        muxctrl_reg(2)(3) <= X"13";
+
+        muxctrl_reg(3)(0) <= X"14";
+        muxctrl_reg(3)(1) <= X"15";
+        muxctrl_reg(3)(2) <= X"16";
+        muxctrl_reg(3)(3) <= X"17";
+
+        muxctrl_reg(4)(0) <= X"20";
+        muxctrl_reg(4)(1) <= X"21";
+        muxctrl_reg(4)(2) <= X"22";
+        muxctrl_reg(4)(3) <= X"23";
+
+        muxctrl_reg(5)(0) <= X"24";
+        muxctrl_reg(5)(1) <= X"25";
+        muxctrl_reg(5)(2) <= X"26";
+        muxctrl_reg(5)(3) <= X"27";
+
+        muxctrl_reg(6)(0) <= X"30";
+        muxctrl_reg(6)(1) <= X"31";
+        muxctrl_reg(6)(2) <= X"32";
+        muxctrl_reg(6)(3) <= X"33";
+
+        muxctrl_reg(7)(0) <= X"34";
+        muxctrl_reg(7)(1) <= X"35";
+        muxctrl_reg(7)(2) <= X"36";
+        muxctrl_reg(7)(3) <= X"37"; -- afe 3, ch 7
 
     else
       if (reg_wren = '1' and AXI_IN.WSTRB = "1111") then

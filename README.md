@@ -1,27 +1,24 @@
 # DAPHNE3 Firmware Overview
 Zynq UltraScale+ (Kria K26) firmware for the PL 
 
-This is the firmware design for the Zynq UltraScale+ Kria device, programmable logic (PL) side. The top level source has been changed from graphical to pure VHDL and the project type changed from regular Vivado project flow to Vivado non-project flow driven by a tcl build script.
+This repo is a collection of firmware modules used for the DAPHNE_MEZZ board. This board uses the Zynq UltraScale+ (Kria) device.
 
-## DAPHNE3 Top Level
+## DAPHNE modules
 
-DAPHNE3.vhd consists of the following functional blocks:
-
-* Zynq PS (Xilinx IP)
-* AXI SmartConnect (Xilinx IP)
 * Front End Alignment and Synchronization Logic (RTL)
-* Spy Buffers (RTL)
+* Input and Output Spy Buffers (RTL)
 * Timing Endpoint (RTL)
 * SPI master for stand alone DAC chips (RTL)
 * SPI master for AFE chips and associated DAC chips (RTL)
 * SPI master for the current monitor (RTL)
 * I2C master for a bunch of devices (Xilinx IP)
 * Misc stuff (RTL)
-* Core Logic (RTL)
+* Streaming Core Logic (RTL)
+* Self-Triggered Core Logic (RTL)
 
 These functional blocks tie together using AXI-LITE interconnect buses so that the processor side of the Zynq (PS) can access them.
 
-## Front End Alignment
+## Front End Alignment Module
 
 The front end de-serialization and alignment logic has changed significantly since DAPHNE2. In that version I had complex state machines to do the "automatic" alignment. These state machines have been removed and replaced with an AXI-LITE interface which provides access to 13 registers that control the front end logic. The idea here is that we will write a program (or script) that runs in user-land and this program controls the alignment process. This program will work closely with the front end and spy buffers to capture, readout, and evaluate the alignment.
 
@@ -61,21 +58,43 @@ There are 13 32-bit registers that control the front end. Most registers are rea
 		bits 31..4 = don't care
 		bits 3..0 = ISERDES "bitslip" value, used for "coarse" word alignment
 
-## Spy Buffers
+## Input Spy Buffer Module
 
-The input spy buffers are deep enough to store 4k samples. The memory interface has changed significantly from the custom GbE/Captan style used on DAPHNE2 to AXI-LITE. 
+The input spy buffer has 4x9 (45) 16-bit inputs. There is a trigger input and an AXI-LITE interface for communication. There are only two registers defined for this module. The control/status register (addr base+0) is used to ARM the module and select which input bus to capture. The value to write here has the AFE number (0-4) in the upper nibble and the AFE channel number (0-8) in the lower nibble. Remember, AFE channel 8 is the special "frame marker which is always seven 1s and seven 0s.
 
-### Base Address and Size
+Reading from the control/status register returns the current state of the spy buffer. Once it is ARMED, it must be triggered by asserting the TRIGGER input. It then captures 4096 samples and waits to be armed again. Read the data register at address base+4 repeatedly to read the captured data. AXI-LITE data is always 32 bits and each 32 bit data word contains ONE sample to keep things simple. The capture depth can be changed with a VHDL generic at build time.
 
-The spy buffer AXI-LITE interface will need to be configured for a base address (use anything that lines up with a 512k byte boundary), and how big the memory window should be (401408 bytes actual, use 512k bytes). See the file spybuffers.vhd for the complete memory map of the various spy buffers. 
+The status of the spy buffer is reported in the uppermost nibble of the status register.
 
-### Data Packing
+	"0001" when (state=rst) else -- in reset
+	"0010" when (state=wait4arm) else -- idle; waiting to be armed by the user
+	"0011" when (state=fifo_clear) else -- flushing the FIFO
+	"0100" when (state=fifo_wait) else -- pause after FIFO flush
+	"0101" when (state=wait4trig) else -- waiting to be triggered 
+	"0110" when (state=store) else -- capturing data but the FIFO is not yet FULL
 
-All spy buffers are 32 bits wide, which means that two 16 bit samples are packed into each 32 bit word. The older sample goes in the lower 16 bits and the newer sample goes into the upper 16 bits. AFE ADC data is 14 bits, so there are two zeros padded into bits 15 and 14.
+Normally, the input spy buffer will be idle in state "wait4arm" (2).
+Once armed, it will move to state "wait4trig" (5).
+Once it has been triggered it will move back to idle "wait4arm" (2) again.
+Now you can read the captured data by reading the data register (base+4) repeatedly.
 
-### Buffer Access
+## Output Spy Buffer Module
 
-Spy buffer memory blocks are read write. Normally one would not write anything into these buffers, as it would be instantly over-written when a trigger occurs. But writing something to these memory locations and reading it back can be a useful debug feature.
+The output spy buffer has eight 64-bit inputs. There is an AXI-LITE interface for communication. There are only two registers defined for this module. The control/status register (address base+0) is used to ARM the module and select which output stream to capture. Reading from the control/status register returns the current state of the spy buffer. Once it is ARMED, the spy buffer looks for the LAST word of a frame, then it then captures the next N VALID samples and waits to be armed again. Read the data register (address base+4) repeatedly to read the captured data. AXI-LITE data is always 32 bits. The captured 64-bit data is read LOW word first, then HIGH word, etc. The capture depth N default is 1024 samples but can be changed at build time with a VHDL generic.
+ 
+The status of the spy buffer is reported in the uppermost nibble of the status register.
+
+	"0001" when (state=rst) else -- in reset
+	"0010" when (state=wait4arm) else -- idle; waiting to be armed by the user
+	"0011" when (state=fifo_clear) else -- flushing the FIFO
+	"0100" when (state=fifo_wait) else -- pause after FIFO flush
+	"0101" when (state=wait4last) else -- waiting for the LAST marker 
+	"0110" when (state=store) else -- capturing data but the FIFO is not yet FULL
+
+Normally, the input spy buffer will be idle in state "wait4arm" (2).
+Once armed, it will move to state "wait4last" (5).
+If output records are flowing, it should very quickly move to state "store" and then back to idle "wait4arm" (2) again.
+Now you can read the captured data by reading the data register (base+4) repeatedly.
 
 ## Timing Endpoint
 
@@ -129,14 +148,23 @@ This module is a "catch all" place where various minor functions are grouped tog
 * analog mux enables and select lines
 * user LEDs
 
-## Core Logic
+## Streaming Core Logic
 
-Core logic details TBD...
+There are eight streaming mode senders, each sender handles four input streams. There is a programmable mux located between this core and the front end module. This programmable mux has an AXI-LITE interface and allows the user to connect any input channel (0-39) to the 8x4 streaming sender inputs.
 
-This sub-module contains the self-triggered sender and the streaming mode sender. This is the "physics" code in the design and will be changing frequently. The core logic operates in a single clock domain using the 62.5MHz master clock. 
+### Streaming Input Mux
 
-Sorting and merging functions are now handled by the core backend logic which includes the MGT high speed 10Gbps serializers. This backend logic is based on the WIB design and is maintained by UK Bristol firmware developers in a separate repository.
+The input mux has 45 inputs (5 AFE x 9 ch x 16 bit) inputs and 32 outputs (8 senders x 4 ch x 14 bits) which feed into the streaming senders. It is fully programmable and supports a few test modes. Each output as a corresponding 8 bit control register (muxctrl) which is also output to the streaming senders.
 
+## Self-Triggered Core Logic
+
+There are 40 independent self-triggered sender modules (STC3.VHD). Each sender computes an average baseline, and the each sender has a unique threshold value (10 bits). A simple algo is used for a trigger condition: one sample below (baseline+theshold) followed by one sample above (baseline+theshold).
+
+Two HERMES channels are used for this sender. Each HERMES input is fed by a 20 self-triggered senders using a round robin selection logic block.
+
+### Thresholds Module
+
+The thresholds can be changed per channel, by reading and writing to this module via the AXI interface. The thresholds are 10 bits, default is 0x3FF, which disables the corresponding self-triggered sender.
 
 ## Misc Firmware Build Details
 
@@ -206,8 +234,9 @@ To do this delay sweep, run this loop:
 	for (i=0; i<512; i++)
 	{
 	  write i to AFE0 Delay Tap Register
-	  trigger spy buffers
-	  x = the first sample of spybuffer AFE0 channel 8 (frame marker)
+	  arm the input spy buffer (write the value 8 here, which selects AFE0 channel 8 "frame marker")
+	  trigger the input spy buffer
+	  x = the first sample of spybuffer
 	  print i, x
 	}
 
@@ -247,8 +276,9 @@ This is where the BITSLIP operation comes in. We know that the frame maker alway
 	for(b=0;b<15;b++)
 	{
 	  write b to AFE0 bitslip control register
-	  trigger spy buffers
-	  x = the first sample of spybuffer AFE0 channel 8 (frame marker)
+	  arm the input spy buffer (write the value 8 here, which selects AFE0 channel 8 "frame marker")
+	  trigger the input spy buffer
+	  x = the first sample of spybuffer
 	  print b, x 
 	}
 
@@ -294,10 +324,7 @@ So for this AFE0 example the ideal tap value is 0x04E and the bitslip value is 3
 	* write 0x0008 to address 4, ADC_RESOLUTION_SELECT=14 bit, ADC_OUTPUT_FORMAT=offset binary, LSB_MSB_FIRST=LSB first
 	* write 0x0100 to address 10, SYNC_PATTERN=YES
 
-11. At any time you can trigger the spy buffers and read them out without impacting any physics operations on DAPHNE. Looking at AFE channel 8 frame marker is a good periodic check to verify that the front end alignment is working properly. 
+11. At any time you can arm/trigger the input and output spy buffers and readout without impacting any physics operations on DAPHNE. Looking at AFE channel 8 frame marker is a good periodic check to verify that the front end alignment is working properly. 
 
 If there is down time and DAPHNE is not taking physics data, it should be possible to put the AFEs into one of the test modes (writing to AFE SPI address 2) and triggering the spy buffers to verify all data channels are properly aligned. Switching the AFE chips into and out of test pattern modes should not impact any timing so it is not likely this alignment procedure would need to be repeated each time the test pattern modes change in the AFE chips.
-
-
-
 
