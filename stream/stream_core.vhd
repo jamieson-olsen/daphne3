@@ -11,7 +11,7 @@ use ieee.numeric_std.all;
 use work.daphne3_package.all;
 
 entity stream_core is
-generic( BLOCKS_PER_RECORD: integer := 64 ); 
+generic( BLOCKS_PER_RECORD: integer := 35 ); 
 port(
     clock: in std_logic;  -- 62.5MHz master clock
     reset: in std_logic; -- async reset active high

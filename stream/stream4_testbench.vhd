@@ -48,7 +48,7 @@ begin
 end process;
 
 DUT: stream4
-generic map( BLOCKS_PER_RECORD => 32 )
+generic map( BLOCKS_PER_RECORD => 35 )
 port map(
     version => "0000",
     channel_id(0) => X"03",

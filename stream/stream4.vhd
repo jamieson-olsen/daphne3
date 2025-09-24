@@ -7,7 +7,7 @@
 -- dense packed into a block of 7 64-bit data words.
 --
 -- an output record is:
--- number of 64-bit header words = 29 (timestamp + 28 reserved)
+-- number of 64-bit header words = 5 (timestamp + 4 reserved)
 -- number of 64-bit data words = BLOCKS_PER_RECORD * 7 
 --
 -- The output record contains a significant number of header words.
@@ -29,7 +29,7 @@ use xpm.vcomponents.all;
 use work.daphne3_package.all;
 
 entity stream4 is
-generic( BLOCKS_PER_RECORD: integer := 64 ); 
+generic( BLOCKS_PER_RECORD: integer := 35 ); 
 port(
     clock: in std_logic;
     reset: in std_logic;
@@ -78,7 +78,7 @@ architecture stream4_arch of stream4 is
     -- BLOCKS_PER_RECORD = 96  --> HOLDOFFCOUNT = 54
     -- BLOCKS_PER_RECORD = 128 --> HOLDOFFCOUNT = 96
 
-    constant HOLDOFFCOUNT: integer range 0 to 1023 := 0;  
+    constant HOLDOFFCOUNT: integer range 0 to 1023 := 24;  
 
 begin
 
@@ -266,7 +266,7 @@ begin
                     end if;
 
                 when header => 
-                    if (wordcount=28) then
+                    if (wordcount=4) then
                         state <= data;
                         wordcount <= 0;
                     else
@@ -305,10 +305,10 @@ begin
                '0';
 
     dout_i <= FIFO_dout(63 downto 0)                       when (state=header and wordcount=0) else -- this is the timestamp header word
-              (channel_id(0) & version & X"0000000000000") when (state=header and wordcount=1) else -- ch0 header word
-              (channel_id(1) & version & X"0000000000000") when (state=header and wordcount=8) else -- ch1 header word
-              (channel_id(2) & version & X"0000000000000") when (state=header and wordcount=15) else -- ch2 header word
-              (channel_id(3) & version & X"0000000000000") when (state=header and wordcount=22) else -- ch3 header word
+              (channel_id(0) & version & X"0000000000000") when (state=header and wordcount=1) else -- ch0 header word 
+              (channel_id(1) & version & X"0000000000000") when (state=header and wordcount=2) else -- ch1 header word
+              (channel_id(2) & version & X"0000000000000") when (state=header and wordcount=3) else -- ch2 header word
+              (channel_id(3) & version & X"0000000000000") when (state=header and wordcount=4) else -- ch3 header word
               FIFO_dout(63 downto 0)                       when (state=data and FIFO_empty='0' and FIFO_dout(64)='0') else -- normal data pass thru
               (others=>'0');
 
