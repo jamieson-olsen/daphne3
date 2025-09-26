@@ -20,11 +20,17 @@ port(
     ch_id: std_logic_vector(7 downto 0);
     version: std_logic_vector(3 downto 0);
     threshold: std_logic_vector(9 downto 0); -- counts relative to calculated avg baseline
+
     clock: in std_logic; -- master clock 62.5MHz
     reset: in std_logic;   
     forcetrig: in std_logic;
     timestamp: in std_logic_vector(63 downto 0);
 	din: in std_logic_vector(13 downto 0); -- aligned AFE data
+
+    record_count: out std_logic_vector(63 downto 0); -- diagnostic counters
+    full_count: out std_logic_vector(63 downto 0);
+    busy_count: out std_logic_vector(63 downto 0);
+
     rd_en: in std_logic; -- read enable
     dout:  out std_logic_vector(71 downto 0);
     ready: out std_logic

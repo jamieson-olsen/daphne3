@@ -1,5 +1,6 @@
 -- stc3.vhd
 -- self triggered channel machine for ONE DAPHNE channel
+-- Jamieson Olsen <jamieson@fnal.gov>
 --
 -- updated again: the backend FIFO returns! The merge logic has been removed from
 -- Adam's 10G sender and is now under control in the DAPHNE core logic.
@@ -8,13 +9,16 @@
 -- (baseline.vhd) based on the last N samples. When it detects a trigger condition
 -- (defined in trig.vhd) it then begins assemblying the output frame in the output FIFO.
 -- The output FIFO is UltraRAM based and is a single clock domain.
-
+--
 -- the trigger module provided here is very basic and is intended as a placeholder
 -- to simulate a more advanced trigger which has a total latency of 64 clock cycles.
-
+--
 -- enable input removed; just set threshold to all 1's to disable this module
-
--- Jamieson Olsen <jamieson@fnal.gov>
+--
+-- 64 bit diagnostic registers:
+-- trig_count = counts the number of trigger pulses
+-- drop_full_count = trigger pulse was ignored because the FIFO was too full
+-- drop_busy_count = trigger pulse was ignored because I was busy
 
 library ieee;
 use ieee.std_logic_1164.all;
@@ -38,6 +42,11 @@ port(
     forcetrig: in std_logic; -- force a trigger
     timestamp: in std_logic_vector(63 downto 0);
 	din: in std_logic_vector(13 downto 0); -- aligned AFE data
+
+    record_count: out std_logic_vector(63 downto 0); -- diagnostic counters
+    full_count: out std_logic_vector(63 downto 0);
+    busy_count: out std_logic_vector(63 downto 0);
+
     ready: out std_logic; -- i have something!
     rd_en: in std_logic; -- output FIFO read enable
     dout: out std_logic_vector(71 downto 0) -- output FIFO data
@@ -59,13 +68,21 @@ signal state: state_type;
 
 signal trig_sample_ts, sample0_ts: std_logic_vector(63 downto 0) := (others=>'0');
 signal calculated_baseline, trig_sample_dat: std_logic_vector(13 downto 0) := (others=>'0');
-signal triggered, forcetrig_reg: std_logic := '0';
+signal triggered: std_logic := '0';
+signal clean_forcetrig: std_logic := '0';
+signal forcetrig_reg: std_logic_vector(1 downto 0) := "00";
 signal FIFO_din: std_logic_vector(71 downto 0) := (others=>'0');
 signal FIFO_wr_en, FIFO_sleep: std_logic := '0';
 signal marker: std_logic_vector(7 downto 0) := X"00";
-signal prog_empty: std_logic;
+signal prog_empty, prog_full: std_logic;
 signal fifo_word_count: std_logic_vector(12 downto 0);
 signal enable: std_logic;
+
+signal record_count_reg: std_logic_vector(63 downto 0) := (others=>'0');
+signal busydrop_count_reg: std_logic_vector(63 downto 0) := (others=>'0');
+signal fulldrop_count_reg: std_logic_vector(63 downto 0) := (others=>'0');
+signal busydrop_reg: std_logic := '0';
+signal fsm_busy: std_logic := '0';
 
 component baseline
 generic( baseline_runlength: integer := 256 );
@@ -90,6 +107,18 @@ port(
 end component;
 
 begin
+
+-- clean up forcetrig (edge detection) just in case it is async or too long
+
+cleantrig_proc: process(clock)
+begin
+    if rising_edge(clock) then
+        forcetrig_reg(0) <= forcetrig;
+        forcetrig_reg(1) <= forcetrig_reg(0);
+    end if;
+end process cleantrig_proc;  
+
+clean_forcetrig <= '1' when (forcetrig_reg="01") else '0';
 
 -- to disable this sender, set threshold value to all 1s.
 
@@ -150,15 +179,6 @@ port map(
     bline => calculated_baseline
 );
 
--- trig may be an async signal, clean it up here
-
-trig_proc: process(clock)
-begin
-    if rising_edge(clock) then
-        forcetrig_reg <= forcetrig;
-    end if;
-end process trig_proc;     
-
 -- for dense data packing 14 bit samples into 64 bit words,
 -- we need to access up to last 6 samples at once...
 
@@ -186,6 +206,67 @@ port map(
      trig_sample_ts => trig_sample_ts 
 );        
 
+-- diagnostic counter records the number of output records generated
+-- this includes forcetrig (from user) and triggered (from data).
+-- this counter is cleared when threshold is force to 0x3FF
+
+record_count_proc: process(clock)
+begin
+    if rising_edge(clock) then
+        if (threshold="1111111111") then
+            record_count_reg <= (others=>'0');
+        elsif (state=h0) then
+            record_count_reg <= std_logic_vector( unsigned(record_count_reg) + 1);
+        end if;
+    end if;
+end process record_count_proc;
+
+record_count <= record_count_reg;
+
+-- diagnostic counter records the number of times a trigger is ignored
+-- because the FIFO is nearly full (prog_full='1')
+-- this counter is cleared when threshold is force to 0x3FF
+
+fulldrop_proc: process(clock)
+begin
+    if rising_edge(clock) then
+        if (threshold="1111111111") then
+            fulldrop_count_reg <= (others=>'0');
+        elsif ((triggered='1' or clean_forcetrig='1') and prog_full='1' and state=wait4trig) then
+            fulldrop_count_reg <= std_logic_vector( unsigned(fulldrop_count_reg) + 1);
+        end if;
+    end if;
+end process fulldrop_proc;
+
+full_count <= fulldrop_count_reg;
+
+-- diagnostic counter records the number of times a trigger is ignored
+-- because the state machine is BUSY doing stuff. use a flag (busydrop_reg)
+-- to prevent multiple trigger pulses from 
+-- this counter is cleared when threshold is force to 0x3FF
+
+fsm_busy <= '0' when (state=rst) else
+            '0' when (state=wait4trig) else
+            '1';
+
+busydrop_proc: process(clock)
+begin
+    if rising_edge(clock) then
+        if (threshold="1111111111") then
+            busydrop_count_reg <= (others=>'0');
+        elsif ((triggered='1' or clean_forcetrig='1') and fsm_busy='1' and busydrop_reg='0') then
+            busydrop_count_reg <= std_logic_vector( unsigned(busydrop_count_reg) + 1);
+            busydrop_reg <= '1';
+        end if;
+
+        if (busydrop_reg='1' and fsm_busy='0') then -- clear the flag as we return to idle
+            busydrop_reg <= '0';
+        end if;
+    end if;
+end process busydrop_proc;
+
+busy_count <= busydrop_count_reg;
+
 -- big FSM waits for trigger condition then dense pack assembly of the output frame 
 -- as it is being written to the output FIFO *IN ORDER* (there is no "jumping back" to update
 -- the header!)
@@ -209,7 +290,7 @@ begin
                 when rst =>
                     state <= wait4trig;
                 when wait4trig => 
-                    if ((triggered='1' or forcetrig_reg='1') and enable='1') then -- start packing
+                    if ((triggered='1' or clean_forcetrig='1') and enable='1' and prog_full='0') then -- start packing!
                         block_count <= 0;
                         state <= w0; 
                     else
@@ -363,8 +444,8 @@ generic map (
    FIFO_READ_LATENCY => 0,  -- FWFT
    FIFO_WRITE_DEPTH => 4096,
    FULL_RESET_VALUE => 0,
-   PROG_EMPTY_THRESH => 220, -- let it fill up nearly all the way!
-   PROG_FULL_THRESH => 10,
+   PROG_EMPTY_THRESH => 220, 
+   PROG_FULL_THRESH => 200,
    RD_DATA_COUNT_WIDTH => 13,
    READ_DATA_WIDTH => 72,
    READ_MODE => "fwft",
@@ -383,8 +464,8 @@ port map (
    empty => open,
    full => open,
    overflow => open,
-   prog_empty => prog_empty, -- let it fill up
-   prog_full => open,
+   prog_empty => prog_empty, 
+   prog_full => prog_full,
    rd_data_count => open,
    rd_rst_busy => open,
    sbiterr => open,
