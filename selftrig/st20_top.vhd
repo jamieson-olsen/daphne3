@@ -22,11 +22,17 @@ generic(
 port(
     thresholds: in array_20x10_type; -- counts relative to the calculated baseline
     version: in std_logic_vector(3 downto 0);
+
     clock: in std_logic; -- main clock 62.5 MHz
     reset: in std_logic;
     timestamp: in std_logic_vector(63 downto 0);
     forcetrig: in std_logic;
 	din: in array_20x14_type; -- 20 AFE channels feed into this module
+
+    record_count: out array_20x64_type; -- diagnostic counters
+    full_count: out array_20x64_type;
+    busy_count: out array_20x64_type;
+
     dout: out std_logic_vector(63 downto 0); -- output to single channel 10G sender
     valid: out std_logic;
     last:  out std_logic
@@ -45,19 +51,25 @@ architecture st20_top_arch of st20_top is
     signal fifo_dout_mux: std_logic_vector(71 downto 0);
 
     component stc3 is
-    generic( baseline_runlength: integer := 256 ); -- options 32, 64, 128, or 256
+    generic( baseline_runlength: integer := 256 );
     port(
         ch_id: std_logic_vector(7 downto 0);
         version: std_logic_vector(3 downto 0);    
-        threshold: std_logic_vector(9 downto 0); -- trig threshold relative to calculated baseline
-        clock: in std_logic; -- master clock 62.5MHz
+        threshold: std_logic_vector(9 downto 0);
+
+        clock: in std_logic;
         reset: in std_logic;
-        forcetrig: in std_logic; -- force a trigger
+        forcetrig: in std_logic;
         timestamp: in std_logic_vector(63 downto 0);
-    	din: in std_logic_vector(13 downto 0); -- aligned AFE data
-        rd_en: in std_logic; -- output FIFO read enable
-        dout: out std_logic_vector(71 downto 0); -- output FIFO data
-        ready: out std_logic -- got something in the output FIFO yo
+    	din: in std_logic_vector(13 downto 0);
+
+        record_count: out std_logic_vector(63 downto 0);
+        full_count: out std_logic_vector(63 downto 0);
+        busy_count: out std_logic_vector(63 downto 0);
+
+        ready: out std_logic;
+        rd_en: in std_logic;
+        dout: out std_logic_vector(71 downto 0)
     );
     end component;
 
@@ -70,17 +82,23 @@ begin
             stc3_inst: stc3
             generic map ( baseline_runlength => baseline_runlength )
             port map(   
-                ch_id => std_logic_vector( to_unsigned(i+start_channel_number, 8) ),  -- now 8 bits
+                ch_id => std_logic_vector( to_unsigned(i+start_channel_number, 8) ),
                 version => version,
                 threshold => thresholds(i),
+
                 clock => clock,
                 reset => reset,
                 forcetrig => forcetrig,
                 timestamp => timestamp,
             	din => din(i),
+
+                record_count => record_count(i),
+                full_count => full_count(i),
+                busy_count => busy_count(i),
+
+                ready => ready(i),
                 rd_en => fifo_rd_en(i),
-                dout => fifo_dout(i),
-                ready => ready(i)
+                dout => fifo_dout(i)
               );
 
     end generate gen_stc;
