@@ -80,11 +80,10 @@ port(
     ep_reset: out std_logic;
     ep_addr: out std_logic_vector(15 downto 0);
     mmcm1_reset: out std_logic;
+    mmcm0_reset: out std_logic;
     use_ep: out std_logic
 );
 end component;
-
-signal reset_async: std_logic := '0';
 
 signal sysclk_ibuf: std_logic;
 signal mmcm0_clkfbout, mmcm0_clkfbout_buf: std_logic;
@@ -102,6 +101,7 @@ signal clock_i: std_logic;
 
 signal mmcm0_locked: std_logic;
 signal mmcm1_locked: std_logic;
+signal mmcm0_reset: std_logic;
 signal mmcm1_reset: std_logic;
 signal use_ep: std_logic;
 signal ep_stat: std_logic_vector(3 downto 0);
@@ -109,11 +109,9 @@ signal ep_reset: std_logic;
 signal ep_ts_rdy: std_logic;
 signal ep_addr: std_logic_vector(15 downto 0);
 
-signal real_timestamp, fake_timestamp, timestamp_reg: std_logic_vector(63 downto 0);
+signal real_timestamp, fake_timestamp, timestamp_reg: std_logic_vector(63 downto 0) := (others=>'0');
 
 begin
-
-reset_async <= not AXI_IN.ARESETN;
 
 -- if using external LVDS 100MHz sysclk, receive it with IBUFDS.
 
@@ -177,7 +175,7 @@ port map(
     CLKINSTOPPED        => open,
     CLKFBSTOPPED        => open,
     PWRDWN              => '0',
-    RST                 => reset_async
+    RST                 => mmcm0_reset
 );
 
 mmcm0_clkfb_inst: BUFG port map( I => mmcm0_clkfbout, O => mmcm0_clkfbout_buf );
@@ -305,11 +303,7 @@ clock <= clock_i;
 fake_ts_proc: process(clock_i)
 begin
     if rising_edge(clock_i) then
-        if (reset_async='1') then
-           fake_timestamp <= (others=>'0');
-        else
-           fake_timestamp <= std_logic_vector(unsigned(fake_timestamp) + 1);
-       end if;
+        fake_timestamp <= std_logic_vector(unsigned(fake_timestamp) + 1);
    end if;
 end process fake_ts_proc;
 

@@ -4,8 +4,8 @@
 -- base+0 = clock control register R/W
 --  bits 31..3: don't care
 --  bit 2: clock source (0=local, 1=use endpoint)
---  bit 1: MMCM1 reset
---  bit 0: reserved
+--  bit 1: MMCM1 reset (does not auto-clear, user must set then clear this bit)
+--  bit 0: MMCM0 reset (does not auto-clear, user must set then clear this bit)
 
 -- base+4 = clock status register R/O
 --  bits 31..2: zero
@@ -40,6 +40,7 @@ entity ep_axi is
 
     ep_reset: out std_logic; -- soft reset endpoint logic
     ep_addr: out std_logic_vector(15 downto 0); -- endpoint address
+    mmcm0_reset: out std_logic;
     mmcm1_reset: out std_logic;
     use_ep: out std_logic );
 end ep_axi;
@@ -306,5 +307,6 @@ begin
 
     use_ep      <= clock_ctrl_reg(2);
     mmcm1_reset <= clock_ctrl_reg(1);
+    mmcm0_reset <= clock_ctrl_reg(0);
 
 end ep_axi_arch;
