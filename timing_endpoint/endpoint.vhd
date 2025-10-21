@@ -113,9 +113,11 @@ signal real_timestamp, fake_timestamp, timestamp_reg: std_logic_vector(63 downto
 
 begin
 
--- if using external LVDS 100MHz sysclk, receive it with IBUFDS.
+-- system clock is 100 MHz LVDS from DAPHNE_MEZZ clock generator, U18, output 3
+-- FPGA internal termination should be enabled here
 
 sysclk_ibufds_inst : IBUFGDS 
+generic map( DIFF_TERM => TRUE, IBUF_LOW_PWR => FALSE, IOSTANDARD => "LVDS_25" )
 port map(O => sysclk_ibuf, I => sysclk_p, IB => sysclk_n);
 
 mmcm0_inst: MMCME2_ADV
