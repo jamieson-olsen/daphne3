@@ -117,7 +117,7 @@ begin
 -- FPGA internal termination should be enabled here
 
 sysclk_ibufds_inst : IBUFGDS 
-generic map( DIFF_TERM => TRUE, IBUF_LOW_PWR => FALSE, IOSTANDARD => "LVDS_25" )
+generic map( DIFF_TERM => TRUE, IBUF_LOW_PWR => FALSE, IOSTANDARD => "LVDS" )
 port map(O => sysclk_ibuf, I => sysclk_p, IB => sysclk_n);
 
 mmcm0_inst: MMCME2_ADV
@@ -343,6 +343,7 @@ port map(
 
     ep_reset => ep_reset,
     ep_addr => ep_addr,
+    mmcm0_reset => mmcm0_reset,
     mmcm1_reset => mmcm1_reset,
     use_ep => use_ep
 );
