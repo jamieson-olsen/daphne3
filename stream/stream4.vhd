@@ -16,7 +16,11 @@
 -- Minimum BLOCKS_PER_RECORD is about 30.
 --
 -- To disable this sender, set all four channel_id bytes to 0xFF.
-
+-- 
+-- calculate running baseline average for each channel
+-- if a sample is X counts above the baseline value, mark that in the
+-- corresponding header field in the NEXT record
+--
 -- Jamieson Olsen <jamieson@fnal.gov>
 
 library ieee;
@@ -29,12 +33,16 @@ use xpm.vcomponents.all;
 use work.daphne3_package.all;
 
 entity stream4 is
-generic( BLOCKS_PER_RECORD: integer := 35 ); 
+generic(
+    BLOCKS_PER_RECORD: integer := 35;
+    BASELINE_RUNLENGTH: integer := 32 -- values allowed: 32, 64, 128 or 256
+); 
 port(
     clock: in std_logic;
     reset: in std_logic;
     version: in std_logic_vector(3 downto 0);
-    channel_id: in array_4x8_type; 
+    channel_id: in array_4x8_type;
+    threshold: in array_4x14_type;
     ts: in std_logic_vector(63 downto 0);
     din: array_4x14_type;
     dout:  out std_logic_vector(63 downto 0);
@@ -65,6 +73,9 @@ architecture stream4_arch of stream4 is
 
     signal sender_enable: std_logic := '1';
 
+    signal sof: std_logic;
+    signal channel_header: array_4x48_type;
+
     -- the holdoff state delays the FIFO read logic, thus allowing the FIFO
     -- to fill up a bit more. when this constant is tuned properly, the FIFO will
     -- go empty a just few times, but only near the end of the record. Note that 
@@ -79,6 +90,18 @@ architecture stream4_arch of stream4 is
     -- BLOCKS_PER_RECORD = 128 --> HOLDOFFCOUNT = 96
 
     constant HOLDOFFCOUNT: integer range 0 to 1023 := 24;  
+
+    component stream_header -- generate header metadata for a channel
+    generic( RUNLENGTH: integer := 32 ); 
+    port(
+        clock: in  std_logic;
+        reset: in  std_logic;
+        threshold: in std_logic_vector(13 downto 0);
+        sof:   in  std_logic;
+        din:   in  std_logic_vector(13 downto 0);
+        hdrdata: out std_logic_vector(47 downto 0)
+    );
+    end component;
 
 begin
 
@@ -101,6 +124,26 @@ begin
     -- (this is done in the input mux module)
 
     sender_enable <= '0' when (channel_id(0)=X"FF" and channel_id(1)=X"FF" and channel_id(2)=X"FF" and channel_id(3)=X"FF") else '1';
+
+    -- monitor live data and compute header metadata...
+    -- this header data will merged into the output stream as 
+    -- the timestamp and event data is being read from the
+    -- output FIFO and formed into records
+
+    sof <= '1' when (state=header and wordcount=4) else '0';
+
+    genhead: for i in 3 downto 0 generate
+        header_inst: stream_header
+        generic map( RUNLENGTH => BASELINE_RUNLENGTH )
+        port map(
+            clock => clock,
+            reset => reset,
+            threshold => threshold(i),
+            sof => sof,
+            din => din(i),
+            hdrdata => channel_header(i) 
+        );
+    end generate;
 
     -- gearbox / packer pipeline runs continuously...
 
@@ -305,10 +348,10 @@ begin
                '0';
 
     dout_i <= FIFO_dout(63 downto 0)                       when (state=header and wordcount=0) else -- this is the timestamp header word
-              (channel_id(0) & version & X"0000000000000") when (state=header and wordcount=1) else -- ch0 header word 
-              (channel_id(1) & version & X"0000000000000") when (state=header and wordcount=2) else -- ch1 header word
-              (channel_id(2) & version & X"0000000000000") when (state=header and wordcount=3) else -- ch2 header word
-              (channel_id(3) & version & X"0000000000000") when (state=header and wordcount=4) else -- ch3 header word
+              (channel_id(0) & version & "0000" & channel_header(0)) when (state=header and wordcount=1) else -- ch0 header word 
+              (channel_id(1) & version & "0000" & channel_header(1)) when (state=header and wordcount=2) else -- ch1 header word
+              (channel_id(2) & version & "0000" & channel_header(2)) when (state=header and wordcount=3) else -- ch2 header word
+              (channel_id(3) & version & "0000" & channel_header(3)) when (state=header and wordcount=4) else -- ch3 header word
               FIFO_dout(63 downto 0)                       when (state=data and FIFO_empty='0' and FIFO_dout(64)='0') else -- normal data pass thru
               (others=>'0');
 

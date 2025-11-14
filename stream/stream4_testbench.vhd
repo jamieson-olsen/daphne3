@@ -13,12 +13,16 @@ end stream4_testbench;
 architecture stream4_testbench_arch of stream4_testbench is
 
 component stream4 is
-generic( BLOCKS_PER_RECORD: integer := 64 ); 
+generic(
+    BLOCKS_PER_RECORD: integer := 64; 
+    BASELINE_RUNLENGTH: integer := 32 -- values allowed: 32, 64, 128 or 256
+); 
 port(
     clock: in std_logic;
     reset: in std_logic;
     version: in std_logic_vector(3 downto 0);
     channel_id: in array_4x8_type; 
+    threshold: in array_4x14_type;
     ts: in std_logic_vector(63 downto 0);
     din: array_4x14_type;
     dout:  out std_logic_vector(63 downto 0);
@@ -55,6 +59,10 @@ port map(
     channel_id(1) => X"06",
     channel_id(2) => X"0A",
     channel_id(3) => X"12",
+    threshold(0) => "00000001000000",
+    threshold(1) => "00000001000000",
+    threshold(2) => "00000001000000",
+    threshold(3) => "00000001000000",
     reset => reset,
     clock => clock,
     ts   => ts,

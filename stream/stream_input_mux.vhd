@@ -2,6 +2,10 @@
 -- For DAPHNE_MEZZ streaming sender
 -- 5x9 input buses -> 8x4 output buses 
 -- 32 8-bit registers for control, these are R/W
+--
+-- adding 32 additional registers, each 14 bits, for programmable thresholds
+-- these are R/W
+--
 -- Jamieson Olsen <jamieson@fnal.gov>
 --
 -- axi-lite memory map:
@@ -48,6 +52,11 @@
 -- base+0x78    select register for dout(7)(2)
 -- base+0x7C    select register for dout(7)(3)
 --
+-- base+0x80 = threshold for dout(0)(0)
+-- base+0x84 = threshold for dout(0)(1)
+-- ....
+-- base+0xFC = threshold for dout(7)(3)
+--
 -- The select register (muxctrl_reg) is 8 bits: the upper nibble specifies
 -- the AFE chip number (0 to 4) and the lower nibble specifies
 -- the AFE channel number (0 to 8). Note that AFE channel 8 is the
@@ -77,6 +86,7 @@ port(
     din: in array_5x9x16_type; -- from the front end
     dout: out array_8x4x14_type;
     muxctrl: out array_8x4x8_type;
+    threshold: out array_8x4x14_type;
     AXI_IN: in AXILITE_INREC;
     AXI_OUT: out AXILITE_OUTREC
   );
@@ -102,6 +112,7 @@ signal reg_data_out:std_logic_vector(31 downto 0);
 signal aw_en: std_logic;
 
 signal muxctrl_reg: array_8x4x8_type; -- afe number in upper nibble, afe channel number in lower nibble
+signal threshold_reg: array_8x4x14_type; -- programmable threshold value 14 bits
 
 signal counter_reg: std_logic_vector(13 downto 0) := "00000000000000";
 signal rand_reg:    std_logic_vector(13 downto 0) := "00100111010101";
@@ -337,6 +348,46 @@ begin
         muxctrl_reg(7)(2) <= X"36";
         muxctrl_reg(7)(3) <= X"37"; -- afe 3, ch 7
 
+        threshold_reg(0)(0) <= (others=>'1');  -- default threshold value is maximum
+        threshold_reg(0)(1) <= (others=>'1'); 
+        threshold_reg(0)(2) <= (others=>'1'); 
+        threshold_reg(0)(3) <= (others=>'1'); 
+
+        threshold_reg(1)(0) <= (others=>'1'); 
+        threshold_reg(1)(1) <= (others=>'1'); 
+        threshold_reg(1)(2) <= (others=>'1'); 
+        threshold_reg(1)(3) <= (others=>'1'); 
+
+        threshold_reg(2)(0) <= (others=>'1'); 
+        threshold_reg(2)(1) <= (others=>'1'); 
+        threshold_reg(2)(2) <= (others=>'1'); 
+        threshold_reg(2)(3) <= (others=>'1'); 
+
+        threshold_reg(3)(0) <= (others=>'1'); 
+        threshold_reg(3)(1) <= (others=>'1'); 
+        threshold_reg(3)(2) <= (others=>'1'); 
+        threshold_reg(3)(3) <= (others=>'1'); 
+
+        threshold_reg(4)(0) <= (others=>'1'); 
+        threshold_reg(4)(1) <= (others=>'1'); 
+        threshold_reg(4)(2) <= (others=>'1'); 
+        threshold_reg(4)(3) <= (others=>'1'); 
+
+        threshold_reg(5)(0) <= (others=>'1'); 
+        threshold_reg(5)(1) <= (others=>'1'); 
+        threshold_reg(5)(2) <= (others=>'1'); 
+        threshold_reg(5)(3) <= (others=>'1'); 
+
+        threshold_reg(6)(0) <= (others=>'1'); 
+        threshold_reg(6)(1) <= (others=>'1'); 
+        threshold_reg(6)(2) <= (others=>'1'); 
+        threshold_reg(6)(3) <= (others=>'1'); 
+
+        threshold_reg(7)(0) <= (others=>'1'); 
+        threshold_reg(7)(1) <= (others=>'1'); 
+        threshold_reg(7)(2) <= (others=>'1'); 
+        threshold_reg(7)(3) <= (others=>'1'); 
+
     else
       if (reg_wren = '1' and AXI_IN.WSTRB = "1111") then
 
@@ -384,6 +435,46 @@ begin
           when X"74" => muxctrl_reg(7)(1) <= AXI_IN.WDATA(7 downto 0);
           when X"78" => muxctrl_reg(7)(2) <= AXI_IN.WDATA(7 downto 0);
           when X"7C" => muxctrl_reg(7)(3) <= AXI_IN.WDATA(7 downto 0);
+
+          when X"80" => threshold_reg(0)(0) <= AXI_IN.WDATA(13 downto 0);
+          when X"84" => threshold_reg(0)(1) <= AXI_IN.WDATA(13 downto 0);
+          when X"88" => threshold_reg(0)(2) <= AXI_IN.WDATA(13 downto 0);
+          when X"8C" => threshold_reg(0)(3) <= AXI_IN.WDATA(13 downto 0);
+
+          when X"90" => threshold_reg(1)(0) <= AXI_IN.WDATA(13 downto 0);
+          when X"94" => threshold_reg(1)(1) <= AXI_IN.WDATA(13 downto 0);
+          when X"98" => threshold_reg(1)(2) <= AXI_IN.WDATA(13 downto 0);
+          when X"9C" => threshold_reg(1)(3) <= AXI_IN.WDATA(13 downto 0);
+
+          when X"A0" => threshold_reg(2)(0) <= AXI_IN.WDATA(13 downto 0);
+          when X"A4" => threshold_reg(2)(1) <= AXI_IN.WDATA(13 downto 0);
+          when X"A8" => threshold_reg(2)(2) <= AXI_IN.WDATA(13 downto 0);
+          when X"AC" => threshold_reg(2)(3) <= AXI_IN.WDATA(13 downto 0);
+
+          when X"B0" => threshold_reg(3)(0) <= AXI_IN.WDATA(13 downto 0);
+          when X"B4" => threshold_reg(3)(1) <= AXI_IN.WDATA(13 downto 0);
+          when X"B8" => threshold_reg(3)(2) <= AXI_IN.WDATA(13 downto 0);
+          when X"BC" => threshold_reg(3)(3) <= AXI_IN.WDATA(13 downto 0);
+
+          when X"C0" => threshold_reg(4)(0) <= AXI_IN.WDATA(13 downto 0);
+          when X"C4" => threshold_reg(4)(1) <= AXI_IN.WDATA(13 downto 0);
+          when X"C8" => threshold_reg(4)(2) <= AXI_IN.WDATA(13 downto 0);
+          when X"CC" => threshold_reg(4)(3) <= AXI_IN.WDATA(13 downto 0);
+
+          when X"D0" => threshold_reg(5)(0) <= AXI_IN.WDATA(13 downto 0);
+          when X"D4" => threshold_reg(5)(1) <= AXI_IN.WDATA(13 downto 0);
+          when X"D8" => threshold_reg(5)(2) <= AXI_IN.WDATA(13 downto 0);
+          when X"DC" => threshold_reg(5)(3) <= AXI_IN.WDATA(13 downto 0);
+
+          when X"E0" => threshold_reg(6)(0) <= AXI_IN.WDATA(13 downto 0);
+          when X"E4" => threshold_reg(6)(1) <= AXI_IN.WDATA(13 downto 0);
+          when X"E8" => threshold_reg(6)(2) <= AXI_IN.WDATA(13 downto 0);
+          when X"EC" => threshold_reg(6)(3) <= AXI_IN.WDATA(13 downto 0);
+
+          when X"F0" => threshold_reg(7)(0) <= AXI_IN.WDATA(13 downto 0);
+          when X"F4" => threshold_reg(7)(1) <= AXI_IN.WDATA(13 downto 0);
+          when X"F8" => threshold_reg(7)(2) <= AXI_IN.WDATA(13 downto 0);
+          when X"FC" => threshold_reg(7)(3) <= AXI_IN.WDATA(13 downto 0);
 
           when others =>
             null;
@@ -519,6 +610,46 @@ reg_data_out <= (X"000000" & muxctrl_reg(0)(0)) when (axi_araddr(7 downto 0)=X"0
                 (X"000000" & muxctrl_reg(7)(2)) when (axi_araddr(7 downto 0)=X"78") else
                 (X"000000" & muxctrl_reg(7)(3)) when (axi_araddr(7 downto 0)=X"7C") else
 
+                (X"0000" & "00" & threshold_reg(0)(0)) when (axi_araddr(7 downto 0)=X"80") else
+                (X"0000" & "00" & threshold_reg(0)(1)) when (axi_araddr(7 downto 0)=X"84") else
+                (X"0000" & "00" & threshold_reg(0)(2)) when (axi_araddr(7 downto 0)=X"88") else
+                (X"0000" & "00" & threshold_reg(0)(3)) when (axi_araddr(7 downto 0)=X"8C") else
+
+                (X"0000" & "00" & threshold_reg(1)(0)) when (axi_araddr(7 downto 0)=X"90") else
+                (X"0000" & "00" & threshold_reg(1)(1)) when (axi_araddr(7 downto 0)=X"94") else
+                (X"0000" & "00" & threshold_reg(1)(2)) when (axi_araddr(7 downto 0)=X"98") else
+                (X"0000" & "00" & threshold_reg(1)(3)) when (axi_araddr(7 downto 0)=X"9C") else
+
+                (X"0000" & "00" & threshold_reg(2)(0)) when (axi_araddr(7 downto 0)=X"A0") else
+                (X"0000" & "00" & threshold_reg(2)(1)) when (axi_araddr(7 downto 0)=X"A4") else
+                (X"0000" & "00" & threshold_reg(2)(2)) when (axi_araddr(7 downto 0)=X"A8") else
+                (X"0000" & "00" & threshold_reg(2)(3)) when (axi_araddr(7 downto 0)=X"AC") else
+
+                (X"0000" & "00" & threshold_reg(3)(0)) when (axi_araddr(7 downto 0)=X"B0") else
+                (X"0000" & "00" & threshold_reg(3)(1)) when (axi_araddr(7 downto 0)=X"B4") else
+                (X"0000" & "00" & threshold_reg(3)(2)) when (axi_araddr(7 downto 0)=X"B8") else
+                (X"0000" & "00" & threshold_reg(3)(3)) when (axi_araddr(7 downto 0)=X"BC") else
+
+                (X"0000" & "00" & threshold_reg(4)(0)) when (axi_araddr(7 downto 0)=X"C0") else
+                (X"0000" & "00" & threshold_reg(4)(1)) when (axi_araddr(7 downto 0)=X"C4") else
+                (X"0000" & "00" & threshold_reg(4)(2)) when (axi_araddr(7 downto 0)=X"C8") else
+                (X"0000" & "00" & threshold_reg(4)(3)) when (axi_araddr(7 downto 0)=X"CC") else
+
+                (X"0000" & "00" & threshold_reg(5)(0)) when (axi_araddr(7 downto 0)=X"D0") else
+                (X"0000" & "00" & threshold_reg(5)(1)) when (axi_araddr(7 downto 0)=X"D4") else
+                (X"0000" & "00" & threshold_reg(5)(2)) when (axi_araddr(7 downto 0)=X"D8") else
+                (X"0000" & "00" & threshold_reg(5)(3)) when (axi_araddr(7 downto 0)=X"DC") else
+
+                (X"0000" & "00" & threshold_reg(6)(0)) when (axi_araddr(7 downto 0)=X"E0") else
+                (X"0000" & "00" & threshold_reg(6)(1)) when (axi_araddr(7 downto 0)=X"E4") else
+                (X"0000" & "00" & threshold_reg(6)(2)) when (axi_araddr(7 downto 0)=X"E8") else
+                (X"0000" & "00" & threshold_reg(6)(3)) when (axi_araddr(7 downto 0)=X"EC") else
+
+                (X"0000" & "00" & threshold_reg(7)(0)) when (axi_araddr(7 downto 0)=X"F0") else
+                (X"0000" & "00" & threshold_reg(7)(1)) when (axi_araddr(7 downto 0)=X"F4") else
+                (X"0000" & "00" & threshold_reg(7)(2)) when (axi_araddr(7 downto 0)=X"F8") else
+                (X"0000" & "00" & threshold_reg(7)(3)) when (axi_araddr(7 downto 0)=X"FC") else
+
                 X"00000000";
 
 -- Output register or memory read data
@@ -543,5 +674,9 @@ end process;
 -- so export this block of registers
 
 muxctrl <= muxctrl_reg;
+
+-- output thresholds
+
+threshold <= threshold_reg;
 
 end stream_input_mux_arch;

@@ -11,7 +11,10 @@ use ieee.numeric_std.all;
 use work.daphne3_package.all;
 
 entity stream_core is
-generic( BLOCKS_PER_RECORD: integer := 35 ); 
+generic(
+    BLOCKS_PER_RECORD: integer := 35; 
+    BASELINE_RUNLENGTH: integer := 32 -- values allowed: 32, 64, 128 or 256
+); 
 port(
     clock: in std_logic;  -- 62.5MHz master clock
     reset: in std_logic; -- async reset active high
@@ -19,6 +22,7 @@ port(
     ts: in std_logic_vector(63 downto 0); -- sync to clock
     din: in array_8x4x14_type;
     channel_id: in array_8x4x8_type;
+    threshold: in array_8x4x14_type;
     dout: out array_8x64_type;
     valid: out std_logic_vector(7 downto 0);
     last: out std_logic_vector(7 downto 0)
@@ -28,12 +32,16 @@ end stream_core;
 architecture stream_core_arch of stream_core is
 
 component stream4
-generic( BLOCKS_PER_RECORD: integer := 64 ); 
+generic(
+    BLOCKS_PER_RECORD: integer := 64;
+    BASELINE_RUNLENGTH: integer := 32
+); 
 port(
     clock: in std_logic;
     reset: in std_logic;
     version: in std_logic_vector(3 downto 0);
-    channel_id: in array_4x8_type; 
+    channel_id: in array_4x8_type;
+    threshold: in array_4x14_type;
     ts: in std_logic_vector(63 downto 0);
     din: array_4x14_type;
     dout:  out std_logic_vector(63 downto 0);
@@ -47,12 +55,15 @@ begin
 gen_senders: for i in 0 to 7 generate
 
     stream4_inst: stream4
-    generic map( BLOCKS_PER_RECORD => BLOCKS_PER_RECORD )
+    generic map(
+        BLOCKS_PER_RECORD => BLOCKS_PER_RECORD, 
+        BASELINE_RUNLENGTH => BASELINE_RUNLENGTH )
     port map(
         clock => clock,
         reset => reset,
         version => version,
         channel_id => channel_id(i),
+        threshold => threshold(i),
         ts => ts,
         din => din(i),
         dout => dout(i),
