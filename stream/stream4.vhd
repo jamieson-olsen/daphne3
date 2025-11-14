@@ -97,8 +97,9 @@ architecture stream4_arch of stream4 is
         clock: in  std_logic;
         reset: in  std_logic;
         threshold: in std_logic_vector(13 downto 0);
-        sof:   in  std_logic;
-        din:   in  std_logic_vector(13 downto 0);
+        ts: in std_logic_vector(15 downto 0);
+        sof: in  std_logic;
+        din: in  std_logic_vector(13 downto 0);
         hdrdata: out std_logic_vector(47 downto 0)
     );
     end component;
@@ -139,6 +140,7 @@ begin
             clock => clock,
             reset => reset,
             threshold => threshold(i),
+            ts => ts(15 downto 0), -- partial timestamp
             sof => sof,
             din => din(i),
             hdrdata => channel_header(i) 

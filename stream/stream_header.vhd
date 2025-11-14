@@ -5,7 +5,7 @@
 -- RUNLENGTH samples have been analyzed, then it will take on a real value.
 --
 -- if a sample is THRESHOLD counts ABOVE the calculated baseline value, report the
--- baseline value, sample value, and offset since from the last SOF
+-- baseline value, sample value, and partial timestamp value
 -- if multiple triggers are observed, report ONLY the FIRST trigger since SOF
 
 library ieee;
@@ -19,7 +19,8 @@ port(
     clock: in  std_logic;
     reset: in  std_logic;
     threshold: in std_logic_vector(13 downto 0);
-    sof:   in  std_logic;  -- start of frame marker, assert JUST AFTER stream4 makes headers
+    sof: in  std_logic;  -- start of frame marker, assert JUST AFTER stream4 makes headers
+    ts: in std_logic_vector(15 downto 0); -- lower 16 bits of timestamp
     din:   in  std_logic_vector(13 downto 0);
     hdrdata: out std_logic_vector(47 downto 0)
 );
@@ -33,7 +34,7 @@ architecture stream_header_arch of stream_header is
     signal trig_baseline_reg: std_logic_vector(13 downto 0);
     signal trig_sample_reg: std_logic_vector(13 downto 0);
     signal trig, trig_reg: std_logic;
-    signal offset_reg, trig_offset_reg: std_logic_vector(15 downto 0);
+    signal trig_ts_reg: std_logic_vector(15 downto 0);
 
 begin
 
@@ -102,18 +103,15 @@ begin
     if rising_edge(clock) then
         if (reset='1' or sof='1') then
             trig_reg <= '0';
-            offset_reg <= (others=>'0');
             trig_baseline_reg <= (others=>'0');
             trig_sample_reg <= (others=>'0');
-            trig_offset_reg <= (others=>'0');
+            trig_ts_reg <= (others=>'0');
         else
             if (trig_reg='0' and trig='1') then  -- FIRST trigger observed, store it
                 trig_baseline_reg <= baseline_reg;
                 trig_sample_reg <= din;
-                trig_offset_reg <= offset_reg;
+                trig_ts_reg <= ts; -- store partial timestamp
                 trig_reg <= '1'; -- ignore subsequent triggers
-            else
-                offset_reg <= std_logic_vector( unsigned(offset_reg) + 1 );
             end if;
         end if;
     end if;            
@@ -121,6 +119,6 @@ end process trig_proc;
 
 -- 48 bit header output is:
 
-hdrdata <= trig_offset_reg & "00" & trig_baseline_reg & "00" & trig_sample_reg;
+hdrdata <= "00" & trig_baseline_reg & "00" & trig_sample_reg & trig_ts_reg;
 
 end stream_header_arch;
