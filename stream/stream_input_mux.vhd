@@ -134,10 +134,11 @@ end process counter_proc;
 -- these registers are R/W from AXI LITE interface
 --
 -- some examples:
--- if mux_ctrl(2)(3)=X"07" then dout(2)(3) is connected to din(0)(7)
+-- if mux_ctrl(2)(3)=X"07" then dout(2)(3) is connected to channel 7 (AFE0 ch7)
 -- if mux_ctrl(4)(1)=X"3B" then dout(4)(1) is forced to all zeros
--- if mux_ctrl(5)(1)=X"2D" then dout(5)(1) is a pseudorandom pattern
-
+-- if mux_ctrl(5)(1)=X"55" then dout(5)(1) is a pseudorandom pattern
+-- if mux_ctrl(6)(2)=X"1D" then dout(6)(2) is connected to channel 29 (AFE 4 ch 5)
+--
 -- do the 16->14 bit truncation here
 
 gen_send: for s in 7 downto 0 generate
