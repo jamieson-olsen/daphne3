@@ -57,19 +57,18 @@
 -- ....
 -- base+0xFC = threshold for dout(7)(3)
 --
--- The select register (muxctrl_reg) is 8 bits: the upper nibble specifies
--- the AFE chip number (0 to 4) and the lower nibble specifies
--- the AFE channel number (0 to 8). Note that AFE channel 8 is the
--- fixed "frame" pattern. there are a few special diagnostic modes
--- in this module, write 0x5* to activate these modes
--- (scroll down for details on what these modes are).
---
--- some examples:
---   connect output(0)(3) to AFE3,ch3 --> write 0x33 to address base+12
---   connect output(4)(2) to AFE6,ch7 --> write 0x67 to address base+72
---   generate random pattern on output(7)(1) --> write 0x2D to address base+116
---   generate counter on output(5)(3) --> write 0x2C to address base+92
---   turn off output(3)(2) --> write 0xFF to address base+56
+-- The select register (muxctrl_reg) is 8 bits
+-- normal values for input channels are 0-39, where:
+-- 0 = AFE0 channel 0
+-- 1 = AFE0 channel 1 
+-- ...
+-- 7 = AFE0 channel 7
+-- 8 = AFE1 channel 1
+-- ...
+-- 39 = AFE4 channel 7
+-- 
+-- values above 39 are for test modes, see description in the code
+-- further down in this file for details
 --
 -- remember: in the streaming mode sender this module determines what data is sent
 -- to the core. it does NOT control what the input spy buffers see!
@@ -152,47 +151,42 @@ gen_send: for s in 7 downto 0 generate
                       din(0)(5)(15 downto 2) when (muxctrl_reg(s)(c)=X"05") else 
                       din(0)(6)(15 downto 2) when (muxctrl_reg(s)(c)=X"06") else 
                       din(0)(7)(15 downto 2) when (muxctrl_reg(s)(c)=X"07") else 
-                      din(0)(8)(15 downto 2) when (muxctrl_reg(s)(c)=X"08") else 
 
-                      din(1)(0)(15 downto 2) when (muxctrl_reg(s)(c)=X"10") else 
-                      din(1)(1)(15 downto 2) when (muxctrl_reg(s)(c)=X"11") else 
-                      din(1)(2)(15 downto 2) when (muxctrl_reg(s)(c)=X"12") else 
-                      din(1)(3)(15 downto 2) when (muxctrl_reg(s)(c)=X"13") else 
-                      din(1)(4)(15 downto 2) when (muxctrl_reg(s)(c)=X"14") else 
-                      din(1)(5)(15 downto 2) when (muxctrl_reg(s)(c)=X"15") else 
-                      din(1)(6)(15 downto 2) when (muxctrl_reg(s)(c)=X"16") else 
-                      din(1)(7)(15 downto 2) when (muxctrl_reg(s)(c)=X"17") else 
-                      din(1)(8)(15 downto 2) when (muxctrl_reg(s)(c)=X"18") else 
+                      din(1)(0)(15 downto 2) when (muxctrl_reg(s)(c)=X"08") else 
+                      din(1)(1)(15 downto 2) when (muxctrl_reg(s)(c)=X"09") else 
+                      din(1)(2)(15 downto 2) when (muxctrl_reg(s)(c)=X"0A") else 
+                      din(1)(3)(15 downto 2) when (muxctrl_reg(s)(c)=X"0B") else 
+                      din(1)(4)(15 downto 2) when (muxctrl_reg(s)(c)=X"0C") else 
+                      din(1)(5)(15 downto 2) when (muxctrl_reg(s)(c)=X"0D") else 
+                      din(1)(6)(15 downto 2) when (muxctrl_reg(s)(c)=X"0E") else 
+                      din(1)(7)(15 downto 2) when (muxctrl_reg(s)(c)=X"0F") else 
 
-                      din(2)(0)(15 downto 2) when (muxctrl_reg(s)(c)=X"20") else 
-                      din(2)(1)(15 downto 2) when (muxctrl_reg(s)(c)=X"21") else 
-                      din(2)(2)(15 downto 2) when (muxctrl_reg(s)(c)=X"22") else 
-                      din(2)(3)(15 downto 2) when (muxctrl_reg(s)(c)=X"23") else 
-                      din(2)(4)(15 downto 2) when (muxctrl_reg(s)(c)=X"24") else 
-                      din(2)(5)(15 downto 2) when (muxctrl_reg(s)(c)=X"25") else 
-                      din(2)(6)(15 downto 2) when (muxctrl_reg(s)(c)=X"26") else 
-                      din(2)(7)(15 downto 2) when (muxctrl_reg(s)(c)=X"27") else 
-                      din(2)(8)(15 downto 2) when (muxctrl_reg(s)(c)=X"28") else 
+                      din(2)(0)(15 downto 2) when (muxctrl_reg(s)(c)=X"10") else 
+                      din(2)(1)(15 downto 2) when (muxctrl_reg(s)(c)=X"11") else 
+                      din(2)(2)(15 downto 2) when (muxctrl_reg(s)(c)=X"12") else 
+                      din(2)(3)(15 downto 2) when (muxctrl_reg(s)(c)=X"13") else 
+                      din(2)(4)(15 downto 2) when (muxctrl_reg(s)(c)=X"14") else 
+                      din(2)(5)(15 downto 2) when (muxctrl_reg(s)(c)=X"15") else 
+                      din(2)(6)(15 downto 2) when (muxctrl_reg(s)(c)=X"16") else 
+                      din(2)(7)(15 downto 2) when (muxctrl_reg(s)(c)=X"17") else 
 
-                      din(3)(0)(15 downto 2) when (muxctrl_reg(s)(c)=X"30") else 
-                      din(3)(1)(15 downto 2) when (muxctrl_reg(s)(c)=X"31") else 
-                      din(3)(2)(15 downto 2) when (muxctrl_reg(s)(c)=X"32") else 
-                      din(3)(3)(15 downto 2) when (muxctrl_reg(s)(c)=X"33") else 
-                      din(3)(4)(15 downto 2) when (muxctrl_reg(s)(c)=X"34") else 
-                      din(3)(5)(15 downto 2) when (muxctrl_reg(s)(c)=X"35") else 
-                      din(3)(6)(15 downto 2) when (muxctrl_reg(s)(c)=X"36") else 
-                      din(3)(7)(15 downto 2) when (muxctrl_reg(s)(c)=X"37") else 
-                      din(3)(8)(15 downto 2) when (muxctrl_reg(s)(c)=X"38") else 
+                      din(3)(0)(15 downto 2) when (muxctrl_reg(s)(c)=X"18") else 
+                      din(3)(1)(15 downto 2) when (muxctrl_reg(s)(c)=X"19") else 
+                      din(3)(2)(15 downto 2) when (muxctrl_reg(s)(c)=X"1A") else 
+                      din(3)(3)(15 downto 2) when (muxctrl_reg(s)(c)=X"1B") else 
+                      din(3)(4)(15 downto 2) when (muxctrl_reg(s)(c)=X"1C") else 
+                      din(3)(5)(15 downto 2) when (muxctrl_reg(s)(c)=X"1D") else 
+                      din(3)(6)(15 downto 2) when (muxctrl_reg(s)(c)=X"1E") else 
+                      din(3)(7)(15 downto 2) when (muxctrl_reg(s)(c)=X"1F") else 
 
-                      din(4)(0)(15 downto 2) when (muxctrl_reg(s)(c)=X"40") else 
-                      din(4)(1)(15 downto 2) when (muxctrl_reg(s)(c)=X"41") else 
-                      din(4)(2)(15 downto 2) when (muxctrl_reg(s)(c)=X"42") else 
-                      din(4)(3)(15 downto 2) when (muxctrl_reg(s)(c)=X"43") else 
-                      din(4)(4)(15 downto 2) when (muxctrl_reg(s)(c)=X"44") else 
-                      din(4)(5)(15 downto 2) when (muxctrl_reg(s)(c)=X"45") else 
-                      din(4)(6)(15 downto 2) when (muxctrl_reg(s)(c)=X"46") else 
-                      din(4)(7)(15 downto 2) when (muxctrl_reg(s)(c)=X"47") else 
-                      din(4)(8)(15 downto 2) when (muxctrl_reg(s)(c)=X"48") else 
+                      din(4)(0)(15 downto 2) when (muxctrl_reg(s)(c)=X"20") else 
+                      din(4)(1)(15 downto 2) when (muxctrl_reg(s)(c)=X"21") else 
+                      din(4)(2)(15 downto 2) when (muxctrl_reg(s)(c)=X"22") else 
+                      din(4)(3)(15 downto 2) when (muxctrl_reg(s)(c)=X"23") else 
+                      din(4)(4)(15 downto 2) when (muxctrl_reg(s)(c)=X"24") else 
+                      din(4)(5)(15 downto 2) when (muxctrl_reg(s)(c)=X"25") else 
+                      din(4)(6)(15 downto 2) when (muxctrl_reg(s)(c)=X"26") else 
+                      din(4)(7)(15 downto 2) when (muxctrl_reg(s)(c)=X"27") else -- 39 decimal
 
                       -- virtual "sixth AFE" chip for making diagnostic patterns:
 
@@ -308,8 +302,8 @@ begin
     if (AXI_IN.ARESETN = '0') then 
 
         -- here are the default muxctrl values
-        muxctrl_reg(0)(0) <= X"00";  -- AFE 0, ch 0
-        muxctrl_reg(0)(1) <= X"01";  -- AFE 0, ch 1
+        muxctrl_reg(0)(0) <= X"00";  -- decimal 0 = AFE 0, ch 0
+        muxctrl_reg(0)(1) <= X"01";  -- decimal 1 = AFE 0, ch 1
         muxctrl_reg(0)(2) <= X"02";
         muxctrl_reg(0)(3) <= X"03";
 
@@ -318,35 +312,35 @@ begin
         muxctrl_reg(1)(2) <= X"06";
         muxctrl_reg(1)(3) <= X"07";
 
-        muxctrl_reg(2)(0) <= X"10";
-        muxctrl_reg(2)(1) <= X"11";
-        muxctrl_reg(2)(2) <= X"12";
-        muxctrl_reg(2)(3) <= X"13";
+        muxctrl_reg(2)(0) <= X"08";
+        muxctrl_reg(2)(1) <= X"09";
+        muxctrl_reg(2)(2) <= X"0A";
+        muxctrl_reg(2)(3) <= X"0B";
 
-        muxctrl_reg(3)(0) <= X"14";
-        muxctrl_reg(3)(1) <= X"15";
-        muxctrl_reg(3)(2) <= X"16";
-        muxctrl_reg(3)(3) <= X"17";
+        muxctrl_reg(3)(0) <= X"0C";
+        muxctrl_reg(3)(1) <= X"0D";
+        muxctrl_reg(3)(2) <= X"0E";
+        muxctrl_reg(3)(3) <= X"0F";
 
-        muxctrl_reg(4)(0) <= X"20";
-        muxctrl_reg(4)(1) <= X"21";
-        muxctrl_reg(4)(2) <= X"22";
-        muxctrl_reg(4)(3) <= X"23";
+        muxctrl_reg(4)(0) <= X"10";
+        muxctrl_reg(4)(1) <= X"11";
+        muxctrl_reg(4)(2) <= X"12";
+        muxctrl_reg(4)(3) <= X"13";
 
-        muxctrl_reg(5)(0) <= X"24";
-        muxctrl_reg(5)(1) <= X"25";
-        muxctrl_reg(5)(2) <= X"26";
-        muxctrl_reg(5)(3) <= X"27";
+        muxctrl_reg(5)(0) <= X"14";
+        muxctrl_reg(5)(1) <= X"15";
+        muxctrl_reg(5)(2) <= X"16";
+        muxctrl_reg(5)(3) <= X"17";
 
-        muxctrl_reg(6)(0) <= X"30";
-        muxctrl_reg(6)(1) <= X"31";
-        muxctrl_reg(6)(2) <= X"32";
-        muxctrl_reg(6)(3) <= X"33";
+        muxctrl_reg(6)(0) <= X"18";
+        muxctrl_reg(6)(1) <= X"19";
+        muxctrl_reg(6)(2) <= X"1A";
+        muxctrl_reg(6)(3) <= X"1B";
 
-        muxctrl_reg(7)(0) <= X"34";
-        muxctrl_reg(7)(1) <= X"35";
-        muxctrl_reg(7)(2) <= X"36";
-        muxctrl_reg(7)(3) <= X"37"; -- afe 3, ch 7
+        muxctrl_reg(7)(0) <= X"1C";
+        muxctrl_reg(7)(1) <= X"1D";
+        muxctrl_reg(7)(2) <= X"1E";
+        muxctrl_reg(7)(3) <= X"1F"; -- decimal 31 = afe 3, ch 7
 
         threshold_reg(0)(0) <= (others=>'1');  -- default threshold value is maximum
         threshold_reg(0)(1) <= (others=>'1'); 
